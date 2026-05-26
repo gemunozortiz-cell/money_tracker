@@ -209,6 +209,9 @@ export function usePortfolioState(userId: string | null = null) {
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const hasLoadedFromCloudRef = useRef<boolean>(false);
   const cloudWriteTimerRef = useRef<number | null>(null);
+  // When true, the current state update came from a Realtime push from another device
+  // (or the same device's own write echo) — skip writing it back to avoid loops.
+  const applyingRealtimeRef = useRef<boolean>(false);
 
   // (1) On sign-in / sign-out: refresh the cloud snapshot
   useEffect(() => {
@@ -263,6 +266,50 @@ export function usePortfolioState(userId: string | null = null) {
     };
   }, [userId]);
 
+  // (1.5) Subscribe to Realtime changes — auto-update when another device writes
+  useEffect(() => {
+    if (!userId || !supabase) return;
+
+    const channel = supabase
+      .channel(`portfolio-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // INSERT or UPDATE
+          schema: "public",
+          table: "portfolios",
+          filter: `user_id=eq.${userId}`
+        },
+        (payload: any) => {
+          const incoming = payload?.new?.state;
+          if (!incoming) return;
+          setState(prev => {
+            // Compare without `currentDateOffsetDays` (that's device-local for the time machine)
+            const stripOffset = (s: any) => {
+              const { currentDateOffsetDays, ...rest } = s || {};
+              return JSON.stringify(rest);
+            };
+            if (stripOffset(prev) === stripOffset(incoming)) {
+              return prev; // No real change — likely echo of our own write
+            }
+            applyingRealtimeRef.current = true;
+            return {
+              ...INITIAL_STATE,
+              ...incoming,
+              currentDateOffsetDays: prev.currentDateOffsetDays // keep local time machine
+            };
+          });
+          setLastSyncedAt(new Date(payload.new.updated_at || Date.now()));
+          setSyncStatus("synced");
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
   // (2) On every state change: write to localStorage (always) + debounced upsert to cloud (if signed in)
   useEffect(() => {
     try {
@@ -272,6 +319,12 @@ export function usePortfolioState(userId: string | null = null) {
     }
 
     if (!userId || !supabase || !hasLoadedFromCloudRef.current) return;
+
+    // Skip cloud write if this state update came from a Realtime push
+    if (applyingRealtimeRef.current) {
+      applyingRealtimeRef.current = false;
+      return;
+    }
 
     if (cloudWriteTimerRef.current) window.clearTimeout(cloudWriteTimerRef.current);
     setSyncStatus("syncing");
