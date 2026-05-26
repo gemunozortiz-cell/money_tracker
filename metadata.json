@@ -1,0 +1,6 @@
+{
+  "name": "Control de Portafolio",
+  "description": "Controlador de portafolio y simulador de alto rendimiento para cuentas mexicanas, tarjetas de crédito, cripto y asesoría inteligente de Gemini.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

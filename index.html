@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es-MX">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <title>Control de Portafolio</title>
+    <meta name="description" content="Portafolio financiero personal: instrumentos, tarjetas, Bitcoin y consejos de IA." />
+
+    <!-- Theme + PWA -->
+    <meta name="theme-color" content="#0c1221" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+
+    <!-- iOS-specific PWA meta -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Portafolio" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+
+    <!-- Preconnect to APIs to shave latency on first paint -->
+    <link rel="preconnect" href="https://api.coingecko.com" crossorigin />
+    <link rel="preconnect" href="https://api.exchangerate.host" crossorigin />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Register service worker only in production builds (avoids dev HMR conflicts)
+      if ("serviceWorker" in navigator && location.hostname !== "localhost") {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("/sw.js").catch((err) => {
+            console.warn("SW registration failed:", err);
+          });
+        });
+      }
+    </script>
+  </body>
+</html>
