@@ -275,6 +275,8 @@ export function usePortfolioState(userId: string | null = null) {
 
     if (cloudWriteTimerRef.current) window.clearTimeout(cloudWriteTimerRef.current);
     setSyncStatus("syncing");
+    // 150ms debounce: fast enough that user can't refresh between action and write,
+    // slow enough to batch micro-rapid updates into a single Supabase call.
     cloudWriteTimerRef.current = window.setTimeout(async () => {
       try {
         const { error } = await supabase.from("portfolios").upsert({
@@ -288,8 +290,45 @@ export function usePortfolioState(userId: string | null = null) {
         console.error("Supabase sync failed:", e?.message || e);
         setSyncStatus("error");
       }
-    }, 800);
+    }, 150);
   }, [state, userId]);
+
+  // Safety net: if the user refreshes/closes the tab DURING a pending write,
+  // flush the localStorage version to Supabase synchronously via fetch+keepalive.
+  // This catches the edge case where someone hits Ctrl+R extremely fast after an action.
+  useEffect(() => {
+    if (!userId || !supabase) return;
+    const handler = () => {
+      if (!cloudWriteTimerRef.current) return;
+      window.clearTimeout(cloudWriteTimerRef.current);
+      cloudWriteTimerRef.current = null;
+      try {
+        const stateRaw = localStorage.getItem("portfolio_state_v3");
+        if (!stateRaw) return;
+        const sessionRaw = Object.keys(localStorage).find(k => k.startsWith("sb-") && k.endsWith("-auth-token"));
+        if (!sessionRaw) return;
+        const session = JSON.parse(localStorage.getItem(sessionRaw) || "null");
+        const accessToken = session?.access_token;
+        if (!accessToken) return;
+        const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/portfolios`;
+        fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
+            "Authorization": `Bearer ${accessToken}`,
+            "Prefer": "resolution=merge-duplicates"
+          },
+          body: JSON.stringify({ user_id: userId, state: JSON.parse(stateRaw) }),
+          keepalive: true
+        }).catch(() => {});
+      } catch {
+        /* best-effort */
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [userId]);
 
   // Reset helper
   const resetToDemo = () => {
