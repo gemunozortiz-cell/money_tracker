@@ -269,6 +269,7 @@ export function usePortfolioState(userId: string | null = null) {
   // (1.5) Subscribe to Realtime changes — auto-update when another device writes
   useEffect(() => {
     if (!userId || !supabase) return;
+    console.log("[Realtime] Setting up subscription for user", userId);
 
     const channel = supabase
       .channel(`portfolio-${userId}`)
@@ -281,8 +282,12 @@ export function usePortfolioState(userId: string | null = null) {
           filter: `user_id=eq.${userId}`
         },
         (payload: any) => {
+          console.log("[Realtime] Event received:", payload?.eventType, payload?.new?.updated_at);
           const incoming = payload?.new?.state;
-          if (!incoming) return;
+          if (!incoming) {
+            console.log("[Realtime] No state in payload, ignoring");
+            return;
+          }
           setState(prev => {
             // Compare without `currentDateOffsetDays` (that's device-local for the time machine)
             const stripOffset = (s: any) => {
@@ -290,8 +295,10 @@ export function usePortfolioState(userId: string | null = null) {
               return JSON.stringify(rest);
             };
             if (stripOffset(prev) === stripOffset(incoming)) {
-              return prev; // No real change — likely echo of our own write
+              console.log("[Realtime] State unchanged, skipping (echo from this device)");
+              return prev;
             }
+            console.log("[Realtime] Applying remote state change");
             applyingRealtimeRef.current = true;
             return {
               ...INITIAL_STATE,
@@ -303,9 +310,13 @@ export function usePortfolioState(userId: string | null = null) {
           setSyncStatus("synced");
         }
       )
-      .subscribe();
+      .subscribe((status: string, err?: Error) => {
+        console.log("[Realtime] Subscription status:", status);
+        if (err) console.error("[Realtime] Subscription error:", err);
+      });
 
     return () => {
+      console.log("[Realtime] Removing subscription");
       supabase.removeChannel(channel);
     };
   }, [userId]);
