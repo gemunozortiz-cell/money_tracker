@@ -1,126 +1,212 @@
-# Control de Portafolio
+<div align="center">
 
-Tu portafolio financiero personal en un solo lugar: instrumentos de tasa diaria (Nu, CETES, Revolut, etc.), tarjetas de crédito con calendario de pagos, Bitcoin en vivo, acciones e índices reales, noticias financieras y consejos personalizados de IA.
+# 💰 Control de Portafolio
 
-**Diseñado para iPhone / PWA**, también funciona en escritorio.
+**Personal finance manager for the Mexican market — real-time prices, AI advisor, cross-device sync, and zero bank-aggregator dependency.**
+
+[**🚀 Live Demo →**](https://money-tracker-2eil.onrender.com)
+
+![Stack](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![Tailwind](https://img.shields.io/badge/Tailwind-v4-06B6D4?style=flat-square&logo=tailwind-css&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-Postgres_%2B_Auth_%2B_Realtime-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
+![Gemini](https://img.shields.io/badge/Google_Gemini-2.5_Flash-4285F4?style=flat-square&logo=google&logoColor=white)
+![License](https://img.shields.io/badge/license-Apache_2.0-yellow?style=flat-square)
+
+</div>
+
+A mobile-first PWA for tracking Mexican savings instruments (Nu, Revolut, CETES), credit cards with cycle calendars, Bitcoin, and equities — with AI-powered expense categorization, live market data, and personalized financial advice. Designed for daily use from the iPhone home screen.
 
 ---
 
-## Instalación (Windows)
+## ✨ Highlights
 
-### 1) Instala Node.js
-Descarga la LTS desde https://nodejs.org/ (cualquier versión 18+). Acepta el instalador con defaults; reinicia tu terminal después.
+### Real-time financial dashboard
+- Net-worth tracker with live BTC/MXN, USD/MXN, and stock prices
+- Daily compound-interest accrual on Mexican savings, honoring Revolut's **tiered rate structure** (15% / 7% / 4.5%) and Mexican withholding tax
+- Time-machine simulator: project portfolio value N days forward
+- Historical net-worth chart (7d / 30d / 90d) using real CoinGecko and Yahoo Finance back-history
 
-Verifica:
-```powershell
-node --version
-npm --version
+### AI advisor (Google Gemini)
+- Personalized financial advice from your real portfolio data
+- Automatic expense categorization (15 categories), with manual override via bottom-sheet picker
+- Market opportunity reports that quote live news headlines
+- Resilient: automatic retry + fallback model on 503 overloads, with clear UX states
+
+### Credit-card cycle management
+- Monthly calendar with cutoff (○) and payment (●) dots per card
+- Smart 7-day alerts for upcoming payments
+- "Mark period as paid" workflow that doesn't break balance tracking
+
+### Investment tracking
+- Bitcoin transactions with real-time P&L in MXN and USD
+- Stocks / ETFs with **ticker autocomplete** from Yahoo Finance (`AAPL`, `SPY`, `NVDA`, Mexican `WALMEX.MX`, etc.) — name, type, exchange, and current price auto-filled
+
+### Multi-device cloud sync
+- Email/password auth via Supabase
+- **Realtime subscription**: a change captured on PC appears on iPhone in < 2 seconds without refresh
+- Row-level security: each user only reads their own row
+- localStorage offline cache + `beforeunload` flush safety net
+
+### iPhone-native feel
+- PWA installable on home screen
+- Bottom tab bar with safe-area insets for the notch
+- 100% dark theme, smooth animations
+- Service worker caches static assets for resilience
+
+---
+
+## 🛠 Tech stack
+
+| Layer | Tools |
+|---|---|
+| **Frontend** | React 19 · TypeScript · Vite 6 · Tailwind CSS v4 · Lucide icons |
+| **Backend** | Node.js · Express · esbuild (server bundling) |
+| **Cloud data** | Supabase (Postgres + Auth + Realtime + RLS) |
+| **AI** | Google Gemini 2.5 Flash + 2.0 Flash (fallback model) |
+| **Live market data** | CoinGecko · Yahoo Finance · exchangerate.host |
+| **News** | RSS aggregation (Bloomberg, CoinDesk, El Economista, Investing.com) |
+| **Hosting** | Render.com (auto-deploy from GitHub `main`) |
+| **Caching** | In-memory TTL cache (30s–10min) + per-IP rate limiter on AI endpoints |
+
+---
+
+## 🏗 Architecture
+
+```
+                  iPhone (Safari PWA)        PC (Chrome PWA)
+                          │                        │
+                          └────────────┬───────────┘
+                                       ▼
+                  ┌──────────────────────────────────┐
+                  │  Render.com — Node + Express     │
+                  │  ───────────────────────────     │
+                  │  /api/btc-price   (CoinGecko)    │
+                  │  /api/fx-rate     (exchangerate) │
+                  │  /api/stock-*     (Yahoo)        │
+                  │  /api/news        (RSS)          │
+                  │  /api/financial-advisor (Gemini) │
+                  │  /api/categorize-expense (Gemini)│
+                  └──────────────────────────────────┘
+                                       │
+                  ┌────────────────────┴───────────────┐
+                  ▼                                    ▼
+       Upstream third-party APIs        Supabase (Postgres)
+       (with cache + rate limit)        ↕ Realtime websocket ↕
+                                        (state sync across devices)
 ```
 
-### 2) Instala dependencias
-```powershell
-cd C:\Users\Usuario\control-de-portafolio
+### Key design decisions
+
+- **Single-document state** stored as `jsonb` per user — simpler than normalizing 7 entity tables, fast enough for personal-scale data, atomic writes
+- **Optimistic sync**: 150ms debounce + `beforeunload` flush + Realtime echo-loop guard via state comparison
+- **API resilience**: every upstream has stale-cache fallback. Gemini calls have automatic retry + alternate model. Yahoo `/v7/finance/quote` (deprecated 2024) replaced with `/v8/finance/chart` per-symbol pattern
+- **Compound interest engine** simulates day-by-day balance evolution honoring historical deposit/withdrawal transactions, Revolut's tiered rate structure, and Mexican retención fiscal — see [`src/hooks/usePortfolioState.ts`](src/hooks/usePortfolioState.ts)
+- **Local-first design**: app works fully offline using localStorage; cloud sync is additive when signed in
+
+---
+
+## 🚀 Local development
+
+```bash
+# Clone
+git clone https://github.com/gemunozortiz-cell/money_tracker.git
+cd money_tracker
+
+# Install
 npm install
+
+# Configure
+cp .env.example .env
+#  Then edit .env with:
+#  GEMINI_API_KEY=...          (aistudio.google.com/apikey — free)
+#  VITE_SUPABASE_URL=...       (your Supabase project URL)
+#  VITE_SUPABASE_ANON_KEY=...  (anon public key)
+
+# Run
+npm run dev    # http://localhost:3000
 ```
 
-### 3) Configura tu API key de Gemini (opcional pero recomendado)
-Crea un archivo `.env` en la raíz del proyecto:
-```
-GEMINI_API_KEY=tu_api_key_aqui
-```
+### Supabase one-time setup
 
-Consigue una **gratis** en https://aistudio.google.com/apikey (Google Cloud — incluye tier free generoso).
+```sql
+create table public.portfolios (
+  user_id    uuid primary key references auth.users(id) on delete cascade,
+  state      jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
 
-Sin la key, los consejos de IA caen a un fallback local pre-escrito.
+alter table public.portfolios enable row level security;
+create policy "Users read own portfolio"   on public.portfolios for select using (auth.uid() = user_id);
+create policy "Users insert own portfolio" on public.portfolios for insert with check (auth.uid() = user_id);
+create policy "Users update own portfolio" on public.portfolios for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
-### 4) Corre la app
-```powershell
-npm run dev
+-- Required for live cross-device updates
+alter publication supabase_realtime add table public.portfolios;
+grant select, insert, update on table public.portfolios to authenticated;
 ```
-Abre http://localhost:3000 en tu navegador.
 
 ---
 
-## Acceso desde tu iPhone
+## 📦 Production build
 
-Tres opciones, de más simple a más completa:
+```bash
+npm run build   # Vite frontend + esbuild server bundle (dist/server.cjs)
+npm start       # Single Node process serves API + static assets
+```
 
-### Opción A — Red local (gratis, solo en tu wifi)
-1. Encuentra la IP local de tu PC: `ipconfig` → busca "IPv4" (ej. `192.168.1.50`).
-2. En tu iPhone (mismo wifi), abre Safari: `http://192.168.1.50:3000`.
-3. Toca **Compartir → Añadir a pantalla de inicio**. Ya tienes la app.
-
-> Limitación: solo funciona cuando estás en casa con la PC encendida.
-
-### Opción B — Tailscale (gratis, desde cualquier lugar)
-1. Instala Tailscale en tu PC y tu iPhone (https://tailscale.com/).
-2. Loguea ambos con la misma cuenta.
-3. Desde tu iPhone, usa la IP de tu PC en la red Tailscale (ej. `100.x.x.x:3000`).
-4. Añade a pantalla de inicio igual que en la opción A.
-
-> Privado, sin abrir puertos, funciona fuera de casa con 4G/5G.
-
-### Opción C — Deploy en la nube (gratis con límites)
-- **Render.com**: conecta tu repo de GitHub, build command `npm run build`, start command `npm start`. Plan free tier.
-- **Railway.app**: similar, despliegues automáticos.
-- **Fly.io**: más control, requiere CLI.
-
-Recuerda configurar `GEMINI_API_KEY` como variable de entorno del servicio.
+The server binds to `process.env.PORT` (set by Render) or `3000` locally. Configuration is read entirely from environment variables — no secrets in code.
 
 ---
 
-## Build de producción
+## 🗺 Roadmap
 
-```powershell
-npm run build
-npm start
-```
-La app se sirve desde `dist/` con Express en el puerto 3000.
+- [ ] Mexican bank integration via [Belvo API](https://belvo.com)
+- [ ] PWA push notifications (alert 3 days before each card's due date)
+- [ ] Income tracking + savings-rate calculation
+- [ ] Recurring expense auto-detection (subscriptions)
+- [ ] CSV import from common bank exports
+- [ ] AI advisor that uses categorized expense history
 
 ---
 
-## Estructura
+## 📁 Project structure
 
 ```
-control-de-portafolio/
-├── server.ts                 # Express: APIs (BTC, FX, stocks, news, IA)
+.
+├── server.ts                            # Express + API routes (BTC, FX, stocks, news, Gemini)
 ├── src/
-│   ├── App.tsx               # Layout principal con bottom tab bar
+│   ├── App.tsx                          # Layout + bottom tab navigation
+│   ├── main.tsx                         # Entry point + AuthGate wrap
 │   ├── hooks/
-│   │   ├── usePortfolioState.ts   # State + interés compuesto día a día
-│   │   └── useLiveData.ts         # Hooks de datos en vivo
-│   └── components/
-│       ├── HomeDashboard.tsx      # Pantalla de inicio con alertas
-│       ├── BottomTabBar.tsx       # Navegación tipo app nativa
-│       ├── InstrumentCard.tsx
-│       ├── BitcoinTracker.tsx
-│       ├── CustomInvestmentsTracker.tsx
-│       ├── CreditCardsTracker.tsx
-│       ├── MarketsAndNews.tsx
-│       ├── GeminiAdvisor.tsx
-│       └── PortfolioCharts.tsx
+│   │   ├── usePortfolioState.ts         # State, compound interest engine, Supabase sync
+│   │   ├── useAuth.ts                   # Session management
+│   │   └── useLiveData.ts               # BTC, FX, stocks, news polling hooks
+│   ├── components/
+│   │   ├── HomeDashboard.tsx            # Hero + actionable alerts
+│   │   ├── BottomTabBar.tsx             # iOS-style 5-tab navigation
+│   │   ├── AuthGate.tsx                 # Login / signup screen
+│   │   ├── InstrumentCard.tsx           # Daily-compound account card
+│   │   ├── BitcoinTracker.tsx           # BTC live price + transactions
+│   │   ├── CustomInvestmentsTracker.tsx # Stocks/ETFs + ticker autocomplete
+│   │   ├── CreditCardsTracker.tsx       # Cards with cycle logic
+│   │   ├── CreditCardsCalendar.tsx      # Monthly cutoff/payment calendar
+│   │   ├── ExpenseCategoryChart.tsx     # Category breakdown bars
+│   │   ├── GeminiAdvisor.tsx            # AI advisor panel
+│   │   ├── MarketsAndNews.tsx           # USD/MXN ticker + RSS news + Gemini opportunities
+│   │   ├── PortfolioCharts.tsx          # Donut + forward projection
+│   │   └── PortfolioHistoryChart.tsx    # Historical net-worth line
+│   └── lib/
+│       ├── categories.ts                # Expense taxonomy (15 categories with colors)
+│       └── supabase.ts                  # Supabase client singleton
 └── public/
-    ├── manifest.webmanifest  # PWA manifest
-    ├── sw.js                 # Service worker (offline cache)
-    └── icon.svg              # Icono de la app
+    ├── manifest.webmanifest             # PWA manifest
+    ├── sw.js                            # Service worker
+    └── icon.svg                         # App icon
 ```
 
 ---
 
-## APIs externas (todas gratis, sin key)
+## 📄 License
 
-| Dato | Fuente | Cache backend |
-|---|---|---|
-| BTC/MXN, BTC/USD | CoinGecko | 30s |
-| USD/MXN | exchangerate.host + open-er-api fallback | 5 min |
-| Acciones (SPY, AAPL, NVDA, etc.) | Yahoo Finance unofficial | 60s (mercado abierto), 5 min (cerrado) |
-| Noticias | RSS de CoinDesk, Bloomberg, Investing, El Economista | 10 min |
-| IA | Google Gemini 2.5 Flash (requiere key) | — |
-
----
-
-## Datos y privacidad
-
-Todo tu portafolio vive en `localStorage` de tu navegador. **Nada sale a la nube.**
-
-Usa el botón **Ajustes → Exportar JSON** para hacer un respaldo regularmente; con **Importar JSON** lo restauras (ideal antes de borrar caché, cambiar de equipo, etc.).
+Apache-2.0
