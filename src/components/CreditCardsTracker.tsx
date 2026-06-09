@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { CreditCard as CardIcon, Calendar, Trash2, Plus, AlertCircle, TrendingDown, ClipboardList, Tag, X, Loader2, FastForward } from "lucide-react";
+import { CreditCard as CardIcon, Calendar, Trash2, Plus, AlertCircle, TrendingDown, ClipboardList, Tag, X, Loader2, FastForward, Pencil } from "lucide-react";
 import { CreditCard, CreditCardExpense } from "../types";
 import { EXPENSE_CATEGORIES, getCategory } from "../lib/categories";
 
@@ -19,6 +19,7 @@ interface CreditCardsTrackerProps {
   onPayCard: (cardId: string, amountPaid: number) => void;
   onUpdateCardBalance: (cardId: string, customBalance: number) => void;
   onUpdateCardPeriod: (cardId: string, offsetMonths: number) => void;
+  onUpdateCardDetails: (cardId: string, fields: { name?: string; creditLimit?: number; cutoffDay?: number; paymentDueDay?: number }) => void;
   simulatedDate: Date;
 }
 
@@ -33,11 +34,41 @@ export function CreditCardsTracker({
   onPayCard,
   onUpdateCardBalance,
   onUpdateCardPeriod,
+  onUpdateCardDetails,
   simulatedDate
 }: CreditCardsTrackerProps) {
   // Category UX state
   const [categorizingIds, setCategorizingIds] = useState<Set<string>>(new Set());
   const [editingCategoryFor, setEditingCategoryFor] = useState<string | null>(null);
+
+  // Edit card dates/limit state
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editLimit, setEditLimit] = useState("");
+  const [editCutoff, setEditCutoff] = useState("");
+  const [editDue, setEditDue] = useState("");
+  const [editError, setEditError] = useState("");
+
+  const openEditCard = (cc: { id: string; name: string; creditLimit: number; cutoffDay: number; paymentDueDay: number }) => {
+    setEditingCardId(cc.id);
+    setEditName(cc.name);
+    setEditLimit(String(cc.creditLimit));
+    setEditCutoff(String(cc.cutoffDay));
+    setEditDue(String(cc.paymentDueDay));
+    setEditError("");
+  };
+
+  const saveEditCard = () => {
+    const limit = parseFloat(editLimit);
+    const cut = parseInt(editCutoff);
+    const due = parseInt(editDue);
+    if (!editName.trim()) return setEditError("El nombre es obligatorio.");
+    if (isNaN(limit) || limit <= 0) return setEditError("Límite inválido.");
+    if (isNaN(cut) || cut < 1 || cut > 31) return setEditError("Día de corte debe ser 1-31.");
+    if (isNaN(due) || due < 1 || due > 31) return setEditError("Día de pago debe ser 1-31.");
+    onUpdateCardDetails(editingCardId!, { name: editName.trim(), creditLimit: limit, cutoffDay: cut, paymentDueDay: due });
+    setEditingCardId(null);
+  };
 
   // Async classify a freshly-added expense via /api/categorize-expense
   const classifyExpense = async (expenseId: string, concept: string, amount: number) => {
@@ -318,13 +349,22 @@ export function CreditCardsTracker({
                         {status.daysLeft < 0 ? "Vencida" : status.daysLeft === 0 ? "¡Hoy!" : `Faltan ${status.daysLeft} d`}
                       </span>
                     </div>
-                    <button
-                      onClick={() => onDeleteCard(cc.id)}
-                      className="text-white/40 hover:text-red-400 transition-colors cursor-pointer p-0.5 ml-auto flex-shrink-0"
-                      title="Destruir tarjeta"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1 ml-auto flex-shrink-0">
+                      <button
+                        onClick={() => openEditCard(cc)}
+                        className="text-white/40 hover:text-indigo-300 transition-colors cursor-pointer p-0.5"
+                        title="Editar fechas y límite"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => onDeleteCard(cc.id)}
+                        className="text-white/40 hover:text-red-400 transition-colors cursor-pointer p-0.5"
+                        title="Eliminar tarjeta"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Balance details */}
@@ -764,6 +804,90 @@ export function CreditCardsTracker({
                   </button>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit card details modal (cutoff/payment days, limit, name) */}
+      {editingCardId && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
+          onClick={() => setEditingCardId(null)}
+        >
+          <div
+            className="bg-[#0e1424] rounded-t-3xl sm:rounded-3xl border-t sm:border border-white/10 w-full max-w-md p-5 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto"
+            style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <span className="text-[10px] uppercase font-extrabold text-indigo-300 tracking-widest">Editar tarjeta</span>
+                <h3 className="text-sm font-black text-white font-display">Fechas, límite y nombre</h3>
+              </div>
+              <button onClick={() => setEditingCardId(null)} className="text-slate-400 hover:text-white p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] text-slate-400 font-bold uppercase mb-1">Nombre</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  className="w-full text-sm border border-white/10 bg-[#080d19] text-white rounded-lg p-2.5 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] text-slate-400 font-bold uppercase mb-1">Día de corte</label>
+                  <input
+                    type="number" min="1" max="31"
+                    value={editCutoff}
+                    onChange={e => setEditCutoff(e.target.value)}
+                    className="w-full text-sm border border-white/10 bg-[#080d19] text-white rounded-lg p-2.5 focus:outline-none focus:border-indigo-500 font-mono"
+                  />
+                  <p className="text-[9px] text-slate-500 mt-1">Día del mes en que cierra el periodo</p>
+                </div>
+                <div>
+                  <label className="block text-[10px] text-slate-400 font-bold uppercase mb-1">Día de pago</label>
+                  <input
+                    type="number" min="1" max="31"
+                    value={editDue}
+                    onChange={e => setEditDue(e.target.value)}
+                    className="w-full text-sm border border-white/10 bg-[#080d19] text-white rounded-lg p-2.5 focus:outline-none focus:border-indigo-500 font-mono"
+                  />
+                  <p className="text-[9px] text-slate-500 mt-1">Fecha límite para pagar sin interés</p>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] text-slate-400 font-bold uppercase mb-1">Límite de crédito (MXN)</label>
+                <input
+                  type="number" step="0.01"
+                  value={editLimit}
+                  onChange={e => setEditLimit(e.target.value)}
+                  className="w-full text-sm border border-white/10 bg-[#080d19] text-white rounded-lg p-2.5 focus:outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+
+              {editError && <p className="text-xs text-rose-400 font-bold">{editError}</p>}
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={saveEditCard}
+                  className="flex-1 bg-indigo-500 hover:bg-indigo-400 active:bg-indigo-600 text-white font-bold text-sm py-2.5 rounded-lg shadow-md transition-colors"
+                >
+                  Guardar cambios
+                </button>
+                <button
+                  onClick={() => setEditingCardId(null)}
+                  className="px-4 py-2.5 bg-white/5 border border-white/10 text-slate-300 hover:text-white text-sm font-bold rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
             </div>
           </div>
         </div>

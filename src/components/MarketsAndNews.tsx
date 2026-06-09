@@ -111,6 +111,7 @@ export function MarketsAndNews({ portfolioStateForAI, currentDateOffsetDays, usd
       const headlineByKind: Record<string, string> = {
         "no-key": "### ⚠️ Falta tu GEMINI_API_KEY\n\nAgrega tu key en `.env` y reinicia `npm run dev`. Consíguela gratis en aistudio.google.com/apikey.",
         "overloaded": "### ⏳ Gemini saturado\n\nLos servidores de Gemini están con alta demanda en este momento (free tier). Reintentamos con un modelo de respaldo pero también falló. Vuelve a tocar **Actualizar** en 30-60 segundos.",
+        "ratelimit": "### ⏳ Demasiadas consultas seguidas\n\nLlegaste al límite de consultas a la IA por minuto. Espera ~1 minuto y toca **Actualizar**.",
         "other": `### ⚠️ Error al llamar a Gemini\n\n\`${(data?.error || "error desconocido").slice(0, 200)}\`\n\nRevisa la consola del servidor para más detalle.`
       };
 

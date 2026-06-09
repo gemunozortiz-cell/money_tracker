@@ -83,7 +83,16 @@ export function useLiveBtc() {
   useEffect(() => {
     refresh();
     const id = setInterval(refresh, 30_000);
-    return () => clearInterval(id);
+    // Refetch immediately when the user returns to the tab/app (Render may have
+    // been asleep, or the interval was throttled in background).
+    const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", refresh);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", refresh);
+    };
   }, [refresh]);
 
   return { ...data, refresh };

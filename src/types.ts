@@ -26,6 +26,7 @@ export interface FinancialInstrument {
   currentBalance: number; // Dynamically updated or manual helper
   annualRate?: number; // Only for DAILY_COMPOUND (e.g. 11.5 for 11.5%)
   createdDate: string; // ISO String or YYYY-MM-DD
+  isCash?: boolean; // True for physical cash / wallet accounts (no interest)
 }
 
 export interface BitcoinPurchase {

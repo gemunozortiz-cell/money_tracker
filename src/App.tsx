@@ -36,6 +36,7 @@ export default function App() {
     clearAllData,
     getHistoricalNetWorth,
     addInstrument,
+    addCashAccount,
     deleteInstrument,
     addTransaction,
     addBitcoinPurchase,
@@ -49,6 +50,7 @@ export default function App() {
     payCreditCard,
     updateCreditCardBalance,
     updateCreditCardPeriod,
+    updateCreditCardDetails,
     addCustomAsset,
     deleteCustomAsset,
     addCustomAssetPurchase,
@@ -140,6 +142,11 @@ export default function App() {
   const [newInstRate, setNewInstRate] = useState("");
   const [newInstBalance, setNewInstBalance] = useState("");
   const [addInstError, setAddInstError] = useState("");
+  // Cash account form
+  const [showAddCash, setShowAddCash] = useState(false);
+  const [newCashName, setNewCashName] = useState("Efectivo");
+  const [newCashBalance, setNewCashBalance] = useState("");
+  const [addCashError, setAddCashError] = useState("");
   const [optimizationToast, setOptimizationToast] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [importError, setImportError] = useState<string>("");
@@ -238,6 +245,16 @@ export default function App() {
     addInstrument(newInstName.trim(), rate, balance);
     setNewInstName(""); setNewInstRate(""); setNewInstBalance(""); setAddInstError("");
     setShowAddInstrument(false);
+  };
+
+  const handleCreateCash = (e: React.FormEvent) => {
+    e.preventDefault();
+    const balance = parseFloat(newCashBalance);
+    if (!newCashName.trim()) return setAddCashError("Nombre requerido.");
+    if (isNaN(balance) || balance < 0) return setAddCashError("Monto inválido.");
+    addCashAccount(newCashName.trim(), balance);
+    setNewCashName("Efectivo"); setNewCashBalance(""); setAddCashError("");
+    setShowAddCash(false);
   };
 
   // Backup / restore
@@ -348,9 +365,9 @@ export default function App() {
 
       {/* Settings drawer */}
       {showSettings && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onClick={() => setShowSettings(false)}>
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4" onClick={() => setShowSettings(false)}>
           <div
-            className="bg-[#0e1424] rounded-3xl border border-white/10 w-full max-w-md p-5 space-y-4 shadow-2xl"
+            className="bg-[#0e1424] rounded-t-3xl sm:rounded-3xl border-t sm:border border-white/10 w-full max-w-md p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto"
             style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
             onClick={e => e.stopPropagation()}
           >
@@ -490,19 +507,55 @@ export default function App() {
         {/* CUENTAS */}
         {activeTab === "cuentas" && (
           <div className="space-y-5">
-            <header className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-black text-white font-display">Cuentas diarias</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Instrumentos con interés compuesto día a día</p>
+            <header>
+              <h2 className="text-xl font-black text-white font-display">Cuentas y efectivo</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Instrumentos con interés diario + efectivo en cartera</p>
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={() => { setAddInstError(""); setShowAddInstrument(!showAddInstrument); setShowAddCash(false); }}
+                  className="flex items-center gap-1.5 py-2 px-3 text-xs font-bold rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 active:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  Instrumento
+                </button>
+                <button
+                  onClick={() => { setAddCashError(""); setShowAddCash(!showAddCash); setShowAddInstrument(false); }}
+                  className="flex items-center gap-1.5 py-2 px-3 text-xs font-bold rounded-xl bg-amber-500/15 hover:bg-amber-500/25 active:bg-amber-500/30 text-amber-300 border border-amber-500/30"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  Efectivo
+                </button>
               </div>
-              <button
-                onClick={() => { setAddInstError(""); setShowAddInstrument(!showAddInstrument); }}
-                className="flex items-center gap-1.5 py-2 px-3 text-xs font-bold rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 active:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30"
-              >
-                <PlusCircle className="w-3.5 h-3.5" />
-                Agregar
-              </button>
             </header>
+
+            {showAddCash && (
+              <form onSubmit={handleCreateCash} className="bg-amber-500/[0.06] border border-amber-500/20 rounded-2xl p-4 space-y-3">
+                <p className="text-[10px] uppercase font-bold text-amber-300 tracking-widest">Nueva cuenta de efectivo</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    required
+                    placeholder="Nombre (Ej. Cartera)"
+                    value={newCashName}
+                    onChange={e => setNewCashName(e.target.value)}
+                    className="w-full text-sm border border-white/10 bg-[#0d1527] text-white rounded-lg p-2.5 focus:border-amber-500 focus:outline-none"
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    placeholder="Monto MXN"
+                    value={newCashBalance}
+                    onChange={e => setNewCashBalance(e.target.value)}
+                    className="w-full text-sm border border-white/10 bg-[#0d1527] text-white rounded-lg p-2.5 focus:border-amber-500 focus:outline-none font-mono"
+                  />
+                </div>
+                {addCashError && <p className="text-xs text-rose-400 font-bold">{addCashError}</p>}
+                <button type="submit" className="w-full bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-white font-bold text-sm py-2.5 rounded-lg shadow-md">
+                  Guardar efectivo
+                </button>
+              </form>
+            )}
 
             <PortfolioHistoryChart series={historicalSeries} variant="full" defaultDays={30} loading={historicalLoading} />
 
@@ -621,6 +674,7 @@ export default function App() {
               onPayCard={payCreditCard}
               onUpdateCardBalance={updateCreditCardBalance}
               onUpdateCardPeriod={updateCreditCardPeriod}
+              onUpdateCardDetails={updateCreditCardDetails}
               simulatedDate={simulatedDate}
             />
           </div>

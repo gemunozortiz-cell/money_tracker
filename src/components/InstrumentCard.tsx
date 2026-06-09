@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { PlusCircle, MinusCircle, Trash2, Calendar, TrendingUp, History } from "lucide-react";
+import { PlusCircle, MinusCircle, Trash2, Calendar, TrendingUp, History, Wallet } from "lucide-react";
 import { FinancialInstrument, Transaction } from "../types";
 
 interface InstrumentCardProps {
@@ -29,6 +29,7 @@ export function InstrumentCard({ instrument, transactions, onAddTransaction, onD
   const [errorMsg, setErrorMsg] = useState<string>("");
 
   const filteredHistory = transactions.filter(t => t.instrumentId === instrument.id);
+  const isCash = !!instrument.isCash;
 
   const handleDeposit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,8 +72,13 @@ export function InstrumentCard({ instrument, transactions, onAddTransaction, onD
       {/* Top Header */}
       <div className="flex items-start justify-between border-b border-white/10 pb-4 mb-4">
         <div>
-          <span className="text-[10px] uppercase tracking-wider font-bold text-slate-300 bg-white/5 border border-white/5 px-2 py-0.5 rounded font-display">
-            Capitalización Diaria
+          <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded font-display border inline-flex items-center gap-1 ${
+            isCash
+              ? "text-amber-300 bg-amber-500/10 border-amber-500/20"
+              : "text-slate-300 bg-white/5 border-white/5"
+          }`}>
+            {isCash && <Wallet className="w-2.5 h-2.5" />}
+            {isCash ? "Efectivo" : "Capitalización Diaria"}
           </span>
           <h3 className="font-extrabold text-white text-lg mt-1 font-display">{instrument.name}</h3>
         </div>
@@ -86,7 +92,8 @@ export function InstrumentCard({ instrument, transactions, onAddTransaction, onD
         </button>
       </div>
 
-      {/* Main Stats Grid */}
+      {/* Main Stats Grid — hidden for cash (no rate, no interest) */}
+      {!isCash && (
       <div className="grid grid-cols-[1.25fr_0.75fr] gap-2 mb-4 bg-white/[0.01] border border-white/5 rounded-xl p-3">
         <div>
           <span className="text-[10px] text-slate-400 uppercase font-semibold block font-display">Tasa Anual</span>
@@ -106,6 +113,7 @@ export function InstrumentCard({ instrument, transactions, onAddTransaction, onD
           </span>
         </div>
       </div>
+      )}
 
       {/* Revolut specific info card */}
       {instrument.name.toLowerCase().includes("revolut") && (
@@ -119,9 +127,15 @@ export function InstrumentCard({ instrument, transactions, onAddTransaction, onD
         </div>
       )}
 
-      {/* Current Accrued Balance Display */}
-      <div className="mb-5 bg-gradient-to-r from-emerald-500/10 to-teal-600/10 border border-emerald-500/30 text-white p-4 rounded-xl shadow-md">
-        <span className="text-xs text-emerald-300 font-bold uppercase tracking-wider block font-display">Saldo Estimado al {simulatedDate.toLocaleDateString("es-MX")}</span>
+      {/* Current Balance Display */}
+      <div className={`mb-5 border p-4 rounded-xl shadow-md ${
+        isCash
+          ? "bg-gradient-to-r from-amber-500/10 to-orange-600/10 border-amber-500/30"
+          : "bg-gradient-to-r from-emerald-500/10 to-teal-600/10 border-emerald-500/30"
+      } text-white`}>
+        <span className={`text-xs font-bold uppercase tracking-wider block font-display ${isCash ? "text-amber-300" : "text-emerald-300"}`}>
+          {isCash ? "Efectivo disponible" : `Saldo Estimado al ${simulatedDate.toLocaleDateString("es-MX")}`}
+        </span>
         <span className="text-2xl font-black block tracking-tight mt-0.5 font-display text-white" id={`balance-${instrument.id}`}>
           ${instrument.currentBalance.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN
         </span>

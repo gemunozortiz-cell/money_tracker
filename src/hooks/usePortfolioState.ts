@@ -437,6 +437,25 @@ export function usePortfolioState(userId: string | null = null) {
     }));
   };
 
+  // Cash / wallet account: an instrument with 0% rate and isCash flag.
+  // Reuses the whole deposit/withdrawal/history machinery.
+  const addCashAccount = (name: string, initialBalance: number) => {
+    const newInst: FinancialInstrument = {
+      id: `cash-${Date.now()}`,
+      name,
+      type: InstrumentType.OTHER,
+      initialBalance,
+      currentBalance: initialBalance,
+      annualRate: 0,
+      createdDate: new Date().toISOString().split("T")[0],
+      isCash: true
+    };
+    setState(prev => ({
+      ...prev,
+      instruments: [...prev.instruments, newInst]
+    }));
+  };
+
   const deleteInstrument = (id: string) => {
     setState(prev => ({
       ...prev,
@@ -618,6 +637,17 @@ export function usePortfolioState(userId: string | null = null) {
     }));
   };
 
+  // Edit cutoff/payment days, limit and name of an existing card (fix mistakes after creation)
+  const updateCreditCardDetails = (
+    cardId: string,
+    fields: Partial<Pick<CreditCard, "name" | "creditLimit" | "cutoffDay" | "paymentDueDay">>
+  ) => {
+    setState(prev => ({
+      ...prev,
+      creditCards: prev.creditCards.map(cc => (cc.id === cardId ? { ...cc, ...fields } : cc))
+    }));
+  };
+
   // CUSTOM ASSETS ACTIONS
   const addCustomAsset = (name: string, symbol: string, type: string, initialPriceMxn: number, initialPriceUsd: number) => {
     const asset: CustomAsset = {
@@ -732,8 +762,10 @@ export function usePortfolioState(userId: string | null = null) {
 
     // Simulate each day sequentially
     while (cursor <= end) {
-      const cursorStr = cursor.toISOString().split("T")[0];
-      
+      // Format as LOCAL YYYY-MM-DD (NOT toISOString, which shifts to UTC and
+      // misaligns transaction matching by one day in negative-offset zones).
+      const cursorStr = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+
       // 1. Process any transactions made ON this day (before daily compounding handles at end of day)
       const daysTxs = txsByDate[cursorStr] || [];
       daysTxs.forEach(tx => {
@@ -785,9 +817,18 @@ export function usePortfolioState(userId: string | null = null) {
         totalInterestsEarned += interestToday;
       }
 
+      // Round to cents at the end of each day, mirroring how real Mexican
+      // savings accounts (Nu, Revolut, SOFIPOs) capitalize daily. This makes
+      // the result deterministic and avoids float drift across renders.
+      currentBalance = Math.round(currentBalance * 100) / 100;
+
       // Advance 1 day
       cursor.setDate(cursor.getDate() + 1);
     }
+
+    // Total interest = final balance minus initial principal minus net deposits,
+    // recomputed cleanly to avoid separate float accumulation drift.
+    totalInterestsEarned = Math.round(totalInterestsEarned * 100) / 100;
 
     return {
       currentBalance: Math.round(currentBalance * 100) / 100,
@@ -979,6 +1020,7 @@ export function usePortfolioState(userId: string | null = null) {
     resetToDemo,
     clearAllData,
     addInstrument,
+    addCashAccount,
     deleteInstrument,
     addTransaction,
     addBitcoinPurchase,
@@ -997,6 +1039,7 @@ export function usePortfolioState(userId: string | null = null) {
     payCreditCard,
     updateCreditCardBalance,
     updateCreditCardPeriod,
+    updateCreditCardDetails,
     // Sync info
     syncStatus,
     lastSyncedAt

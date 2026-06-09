@@ -44,7 +44,7 @@ async function fetchWithTimeout(url: string, timeoutMs = 6000, init?: RequestIni
 
 // Per-IP rate limit for Gemini endpoints (tokens cost real money).
 const geminiHits = new Map<string, number[]>();
-function geminiRateLimited(ip: string, maxPerMinute = 8): boolean {
+function geminiRateLimited(ip: string, maxPerMinute = 25): boolean {
   const now = Date.now();
   const windowStart = now - 60_000;
   const hits = (geminiHits.get(ip) || []).filter(t => t > windowStart);
@@ -74,7 +74,7 @@ function getGeminiClient() {
 // `gemini-3.5-flash` does NOT exist — that was the silent bug that kept the
 // app stuck in fallback mode. 2.5-flash is current, fast and cheap.
 const GEMINI_MODEL_PRIMARY = "gemini-2.5-flash";
-const GEMINI_MODEL_FALLBACK = "gemini-2.0-flash-exp";
+const GEMINI_MODEL_FALLBACK = "gemini-2.0-flash"; // stable (not -exp, which can be deprecated)
 
 // Calls Gemini with: 1 retry on 503/UNAVAILABLE → swap to a different model.
 // Surfaces structured errors so the client can show precise messages.
@@ -581,7 +581,7 @@ Como asesor financiero experto en México:
   app.post("/api/market-opportunities", async (req, res) => {
     const ip = req.ip || "unknown";
     if (geminiRateLimited(ip)) {
-      return res.status(429).json({ error: "Demasiadas solicitudes. Intenta en un minuto." });
+      return res.status(429).json({ error: "Demasiadas solicitudes. Intenta en un minuto.", errorKind: "ratelimit" });
     }
 
     try {
