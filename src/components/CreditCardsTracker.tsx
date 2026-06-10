@@ -338,10 +338,11 @@ export function CreditCardsTracker({
               <div key={cc.id} className="border border-white/10 rounded-2xl p-3 sm:p-4 flex flex-col justify-between bg-white/[0.01] hover:bg-white/[0.03] hover:border-indigo-500/25 transition-all shadow-sm" id={`card-block-${cc.id}`}>
                 {/* Visual Plastic representation */}
                 <div className="bg-gradient-to-tr from-slate-950 via-indigo-950 to-indigo-900 border border-white/5 text-white rounded-xl p-4 relative overflow-hidden shadow-lg aspect-[1.58/1] flex flex-col justify-between">
-                  <div className="absolute right-0 top-0 w-32 h-32 rounded-full bg-indigo-500/10 blur-2xl"></div>
-                   
+                  {/* Decorative blur — must NOT capture clicks meant for the edit/delete buttons */}
+                  <div className="absolute right-0 top-0 w-32 h-32 rounded-full bg-indigo-500/10 blur-2xl pointer-events-none"></div>
+
                   {/* Top line banner */}
-                  <div className="flex justify-between items-start gap-1">
+                  <div className="flex justify-between items-start gap-1 relative z-10">
                     <div className="flex items-center gap-1.5 flex-wrap max-w-[85%]">
                       <span className={`w-2 h-2 rounded-full block ${status.daysLeft < 5 ? "bg-red-400 animate-ping" : status.daysLeft <= 12 ? "bg-amber-400" : "bg-emerald-400"}`} />
                       <span className="text-xs font-bold tracking-widest uppercase font-display">{cc.name}</span>
