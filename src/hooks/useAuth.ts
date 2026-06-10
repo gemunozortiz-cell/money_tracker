@@ -37,11 +37,22 @@ export function useAuth(): UseAuthResult {
       if (!mounted) return;
       setSession(data.session);
       setLoading(false);
+      // Seed the Realtime socket with the current access token so its JWT
+      // doesn't go stale and loop on CHANNEL_ERROR.
+      if (data.session?.access_token) {
+        try { supabase!.realtime.setAuth(data.session.access_token); } catch {}
+      }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
       if (!mounted) return;
       setSession(newSession);
+      // CRITICAL: when Supabase refreshes the token (~hourly) or signs in,
+      // hand the fresh token to the Realtime socket. Without this the
+      // websocket keeps using the expired JWT and reconnect-loops forever.
+      if (newSession?.access_token) {
+        try { supabase!.realtime.setAuth(newSession.access_token); } catch {}
+      }
     });
 
     return () => {
