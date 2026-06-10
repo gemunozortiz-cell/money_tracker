@@ -41,6 +41,9 @@ export function CreditCardsTracker({
   const [categorizingIds, setCategorizingIds] = useState<Set<string>>(new Set());
   const [editingCategoryFor, setEditingCategoryFor] = useState<string | null>(null);
 
+  // Delete confirmation state
+  const [deleteConfirmCardId, setDeleteConfirmCardId] = useState<string | null>(null);
+
   // Edit card dates/limit state
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -359,7 +362,7 @@ export function CreditCardsTracker({
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        onClick={() => onDeleteCard(cc.id)}
+                        onClick={() => setDeleteConfirmCardId(cc.id)}
                         className="text-white/40 hover:text-red-400 transition-colors cursor-pointer p-0.5"
                         title="Eliminar tarjeta"
                       >
@@ -367,6 +370,31 @@ export function CreditCardsTracker({
                       </button>
                     </div>
                   </div>
+
+                  {/* Delete confirmation overlay */}
+                  {deleteConfirmCardId === cc.id && (
+                    <div className="absolute inset-0 z-20 bg-[#0c1222]/96 backdrop-blur-md rounded-xl flex flex-col items-center justify-center text-center p-4 animate-fade-in border border-red-500/30">
+                      <Trash2 className="w-7 h-7 text-red-400 mb-2" />
+                      <p className="text-sm font-extrabold text-white">¿Eliminar {cc.name}?</p>
+                      <p className="text-[10px] text-slate-400 mt-1 mb-4 leading-relaxed max-w-[240px]">
+                        Se borrará la tarjeta y todos sus gastos registrados. Esta acción no se puede deshacer.
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => { onDeleteCard(cc.id); setDeleteConfirmCardId(null); }}
+                          className="px-3.5 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-bold transition-colors shadow-md"
+                        >
+                          Sí, eliminar
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirmCardId(null)}
+                          className="px-3.5 py-1.5 bg-white/10 hover:bg-white/20 text-slate-200 rounded-lg text-xs font-bold transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Balance details */}
                   <div className="mt-2">
