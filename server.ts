@@ -71,6 +71,32 @@ function getGeminiClient() {
   return aiClient;
 }
 
+// Humanize the onboarding profile into a prompt block so Gemini tailors advice.
+function describeUserProfile(p: any): string {
+  if (!p || (!p.completedAt && !p.goal)) return "";
+  const goalMap: Record<string, string> = {
+    "ahorrar": "Ahorrar más", "salir-deudas": "Salir de deudas",
+    "invertir": "Invertir y crecer su dinero", "organizar": "Organizar gastos", "todo": "Objetivo integral"
+  };
+  const riskMap: Record<string, string> = {
+    "conservador": "Conservador (evita perder)", "moderado": "Moderado", "agresivo": "Agresivo (busca altos rendimientos)"
+  };
+  const horizonMap: Record<string, string> = {
+    "corto": "Corto plazo (<1 año)", "mediano": "Mediano plazo (1-5 años)", "largo": "Largo plazo (5+ años)"
+  };
+  const lines: string[] = [];
+  if (p.goal) lines.push(`  - Objetivo principal: ${goalMap[p.goal] || p.goal}`);
+  if (p.ageRange) lines.push(`  - Edad: ${p.ageRange} años`);
+  if (p.occupation) lines.push(`  - Ocupación: ${p.occupation}`);
+  if (p.incomeRange) lines.push(`  - Ingreso mensual aprox: $${p.incomeRange} MXN`);
+  if (p.currentSavingsRate) lines.push(`  - Ahorro actual: ${p.currentSavingsRate}% del ingreso`);
+  if (p.potentialSavingsRate) lines.push(`  - Ahorro potencial realista: ${p.potentialSavingsRate}%`);
+  if (p.riskTolerance) lines.push(`  - Tolerancia al riesgo: ${riskMap[p.riskTolerance] || p.riskTolerance}`);
+  if (p.horizon) lines.push(`  - Horizonte de metas: ${horizonMap[p.horizon] || p.horizon}`);
+  if (lines.length === 0) return "";
+  return `\n\nPERFIL DEL USUARIO (personaliza tus consejos a esto):\n${lines.join("\n")}`;
+}
+
 // `gemini-3.5-flash` does NOT exist — that was the silent bug that kept the
 // app stuck in fallback mode. 2.5-flash is current, fast and cheap.
 const GEMINI_MODEL_PRIMARY = "gemini-2.5-flash";
@@ -550,7 +576,8 @@ Como asesor financiero experto en México:
 1. Evalúa salud de deuda (saldo TDC vs liquidez, riesgo de intereses según fechas).
 2. Analiza diversificación (renta fija vs renta variable vs cripto).
 3. Recomendaciones por nivel de riesgo (Bajo / Medio / Alto) citando tasas reales (CETES, Banxico, S&P 500 CAGR ~10%, volatilidad BTC).
-4. Español de México, Markdown con viñetas, máximo 600 palabras.`;
+4. Si tengo un perfil definido abajo, AJUSTA tus consejos a mi objetivo, edad, ingreso, capacidad de ahorro y tolerancia al riesgo. Sé específico y empático con mi situación.
+5. Español de México, Markdown con viñetas, máximo 600 palabras.${describeUserProfile(portfolioData.userProfile)}`;
 
       const { text, modelUsed } = await callGeminiResilient({
         contents: prompt,
@@ -616,8 +643,8 @@ ${customAssetsText || "  * Sin posiciones."}
 Por favor:
 1. Conecta noticias específicas con mi portafolio (¿qué cambia para mí?).
 2. Impacto del tipo de cambio en activos en dólares.
-3. 3 recomendaciones accionables hoy.
-4. Markdown, español de México, máximo 500 palabras.`;
+3. 3 recomendaciones accionables hoy, ajustadas a mi perfil si está definido abajo.
+4. Markdown, español de México, máximo 500 palabras.${describeUserProfile(portfolioData.userProfile)}`;
 
       const { text, modelUsed } = await callGeminiResilient({
         contents: prompt,

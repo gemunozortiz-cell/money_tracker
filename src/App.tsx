@@ -19,6 +19,7 @@ import { CreditCardsCalendar } from "./components/CreditCardsCalendar";
 import { ExpenseCategoryChart } from "./components/ExpenseCategoryChart";
 import { CustomInvestmentsTracker } from "./components/CustomInvestmentsTracker";
 import { MarketsAndNews } from "./components/MarketsAndNews";
+import { OnboardingWizard } from "./components/OnboardingWizard";
 import {
   PiggyBank, PlusCircle, Zap, RotateCcw, Settings, X,
   Download, Upload, Trash2, LogOut, Cloud, CloudOff, Loader2 as Spinner, CheckCircle2, AlertCircle
@@ -37,6 +38,7 @@ export default function App() {
     getHistoricalNetWorth,
     addInstrument,
     addCashAccount,
+    setUserProfile,
     deleteInstrument,
     addTransaction,
     addBitcoinPurchase,
@@ -150,6 +152,11 @@ export default function App() {
   const [optimizationToast, setOptimizationToast] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [importError, setImportError] = useState<string>("");
+  // Onboarding: show after sign-in if no profile yet (and not skipped this session)
+  const [skippedOnboardingThisSession, setSkippedOnboardingThisSession] = useState(false);
+  const [forceOnboarding, setForceOnboarding] = useState(false); // when editing profile from Settings
+  const profileDone = !!(state.userProfile?.completedAt || state.userProfile?.skipped);
+  const showOnboarding = forceOnboarding || (!profileDone && !skippedOnboardingThisSession);
 
   const simulatedDate = getSimulatedDate();
 
@@ -218,7 +225,8 @@ export default function App() {
     transactions: state.transactions,
     computedCustomAssets,
     totalCustomAssetsValuationMxn,
-    totalCustomAssetsInvestedMxn
+    totalCustomAssetsInvestedMxn,
+    userProfile: state.userProfile
   };
 
   // Historical net worth series — recomputed when state or historical prices change.
@@ -294,6 +302,27 @@ export default function App() {
   // === RENDER ===
   return (
     <div className="min-h-screen bg-[#0c1221] text-slate-100 font-sans relative overflow-x-hidden" id="app-root">
+      {/* Onboarding wizard — full-screen overlay */}
+      {showOnboarding && (
+        <OnboardingWizard
+          initial={state.userProfile}
+          onComplete={(profile) => {
+            setUserProfile(profile);
+            setForceOnboarding(false);
+          }}
+          onSkip={() => {
+            // If editing from settings, just close; if first-time, mark skipped this session
+            if (forceOnboarding) {
+              setForceOnboarding(false);
+            } else {
+              setSkippedOnboardingThisSession(true);
+              // Persist a light "skipped" flag so it doesn't nag every reload
+              setUserProfile({ ...(state.userProfile || {}), skipped: true });
+            }
+          }}
+        />
+      )}
+
       {/* Ambient blur backgrounds */}
       <div className="absolute top-[-100px] right-[-100px] w-96 h-96 bg-blue-600/10 rounded-full blur-[120px] pointer-events-none z-0" />
       <div className="absolute bottom-[20%] left-[5%] w-80 h-80 bg-emerald-600/5 rounded-full blur-[100px] pointer-events-none z-0" />
@@ -395,6 +424,18 @@ export default function App() {
               {state.currentDateOffsetDays > 0 && (
                 <p className="text-[10px] text-indigo-300 font-bold mt-2">Simulando +{state.currentDateOffsetDays} días</p>
               )}
+            </div>
+
+            <div>
+              <h4 className="text-[10px] uppercase font-extrabold text-slate-400 tracking-widest mb-2">Perfil financiero</h4>
+              <button
+                onClick={() => { setShowSettings(false); setForceOnboarding(true); }}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                {profileDone ? "Editar mi perfil" : "Completar mi perfil"}
+              </button>
+              <p className="text-[10px] text-slate-500 mt-2">Tus respuestas personalizan los consejos de la IA.</p>
             </div>
 
             <div>

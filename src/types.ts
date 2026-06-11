@@ -66,6 +66,19 @@ export interface CreditCard {
   nextPeriodOffsetMonths?: number; // Shifts due date forward
 }
 
+export interface UserProfile {
+  goal?: string;                  // objetivo principal
+  ageRange?: string;              // rango de edad
+  occupation?: string;            // ocupación
+  incomeRange?: string;           // ingreso mensual aprox
+  currentSavingsRate?: string;    // % que ahorra hoy
+  potentialSavingsRate?: string;  // % que podría ahorrar
+  riskTolerance?: string;         // tolerancia al riesgo
+  horizon?: string;               // horizonte de metas
+  completedAt?: string;           // ISO; su presencia indica onboarding completado
+  skipped?: boolean;              // true si el usuario lo saltó
+}
+
 export interface CreditCardExpense {
   id: string;
   cardId: string;

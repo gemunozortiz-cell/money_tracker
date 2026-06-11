@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useRef } from "react";
-import { FinancialInstrument, InstrumentType, BitcoinPurchase, CustomAsset, CustomAssetPurchase, CreditCard, CreditCardExpense, Transaction } from "../types";
+import { FinancialInstrument, InstrumentType, BitcoinPurchase, CustomAsset, CustomAssetPurchase, CreditCard, CreditCardExpense, Transaction, UserProfile } from "../types";
 import { supabase } from "../lib/supabase";
 
 export type SyncStatus = "offline" | "loading" | "syncing" | "synced" | "error";
@@ -25,6 +25,7 @@ export interface PortfolioState {
   cardExpenses: CreditCardExpense[];
   transactions: Transaction[];
   currentDateOffsetDays: number; // For "time travel" simulation!
+  userProfile?: UserProfile; // onboarding answers (optional)
 }
 
 const INITIAL_STATE: PortfolioState = {
@@ -435,6 +436,11 @@ export function usePortfolioState(userId: string | null = null) {
       ...prev,
       instruments: [...prev.instruments, newInst]
     }));
+  };
+
+  // Onboarding profile
+  const setUserProfile = (profile: UserProfile) => {
+    setState(prev => ({ ...prev, userProfile: profile }));
   };
 
   // Cash / wallet account: an instrument with 0% rate and isCash flag.
@@ -1021,6 +1027,7 @@ export function usePortfolioState(userId: string | null = null) {
     clearAllData,
     addInstrument,
     addCashAccount,
+    setUserProfile,
     deleteInstrument,
     addTransaction,
     addBitcoinPurchase,
