@@ -6,6 +6,7 @@
 import { useState, useEffect, useRef } from "react";
 import { FinancialInstrument, InstrumentType, BitcoinPurchase, CustomAsset, CustomAssetPurchase, CreditCard, CreditCardExpense, Transaction, UserProfile } from "../types";
 import { supabase } from "../lib/supabase";
+import { todayLocalYmd } from "../lib/dates";
 
 export type SyncStatus = "offline" | "loading" | "syncing" | "synced" | "error";
 
@@ -430,7 +431,7 @@ export function usePortfolioState(userId: string | null = null) {
       initialBalance,
       currentBalance: initialBalance,
       annualRate: rate,
-      createdDate: new Date().toISOString().split("T")[0],
+      createdDate: todayLocalYmd(),
       ...(balanceCap !== undefined ? { balanceCap } : {}),
       ...(excessRate !== undefined ? { excessRate } : {})
     };
@@ -477,7 +478,7 @@ export function usePortfolioState(userId: string | null = null) {
       initialBalance,
       currentBalance: initialBalance,
       annualRate: 0,
-      createdDate: new Date().toISOString().split("T")[0],
+      createdDate: todayLocalYmd(),
       isCash: true
     };
     setState(prev => ({
@@ -500,7 +501,7 @@ export function usePortfolioState(userId: string | null = null) {
       instrumentId,
       type,
       amount,
-      date: customDate || new Date().toISOString().split("T")[0],
+      date: customDate || todayLocalYmd(),
       concept: type === "WITHDRAWAL" ? (concept || "Retiro general") : concept
     };
     setState(prev => ({
@@ -652,7 +653,7 @@ export function usePortfolioState(userId: string | null = null) {
             cardId,
             concept: `Pago Registrado (${new Date().toLocaleDateString("es-MX", { day: "numeric", month: "short" })})`,
             amount: -amountPaid,
-            date: new Date().toISOString().split("T")[0]
+            date: todayLocalYmd()
           },
           ...prev.cardExpenses
         ]
@@ -1022,7 +1023,8 @@ export function usePortfolioState(userId: string | null = null) {
       const day = new Date(today);
       day.setDate(today.getDate() - i);
       day.setHours(0, 0, 0, 0);
-      const dStr = day.toISOString().split("T")[0];
+      // Local YYYY-MM-DD (toISOString would shift to UTC, desfasando la serie un día en MX)
+      const dStr = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
 
       // 1) Liquidity: sum of instrument balances accrued to this day
       let liquidity = 0;

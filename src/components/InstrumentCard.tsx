@@ -6,6 +6,7 @@
 import React, { useState } from "react";
 import { PlusCircle, MinusCircle, Trash2, Calendar, TrendingUp, History, Wallet, Pencil } from "lucide-react";
 import { FinancialInstrument, Transaction } from "../types";
+import { todayLocalYmd } from "../lib/dates";
 
 interface InstrumentCardProps {
   key?: string;
@@ -23,7 +24,7 @@ export function InstrumentCard({ instrument, transactions, onAddTransaction, onD
   const [amount, setAmount] = useState<string>("");
   const [concept, setConcept] = useState<string>("");
   const [transactionDate, setTransactionDate] = useState<string>(
-    new Date().toISOString().split("T")[0]
+    todayLocalYmd()
   );
   
   // Error handling

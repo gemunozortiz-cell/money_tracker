@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from "react";
 import { TrendingUp, Plus, Trash2, RotateCw, Coins, Calendar, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { BitcoinPurchase } from "../types";
+import { todayLocalYmd } from "../lib/dates";
 
 interface BitcoinTrackerProps {
   btcTransactions: BitcoinPurchase[];
@@ -30,7 +31,7 @@ export function BitcoinTracker({
 }: BitcoinTrackerProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [purchaseDate, setPurchaseDate] = useState<string>(
-    new Date().toISOString().split("T")[0]
+    todayLocalYmd()
   );
   const [montoMxnString, setMontoMxnString] = useState<string>("");
   const [cantidadBtcString, setCantidadBtcString] = useState<string>("");

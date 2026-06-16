@@ -7,6 +7,7 @@ import React, { useState } from "react";
 import { CreditCard as CardIcon, Calendar, Trash2, Plus, AlertCircle, TrendingDown, ClipboardList, Tag, X, Loader2, FastForward, Pencil } from "lucide-react";
 import { CreditCard, CreditCardExpense } from "../types";
 import { EXPENSE_CATEGORIES, getCategory } from "../lib/categories";
+import { todayLocalYmd } from "../lib/dates";
 
 interface CreditCardsTrackerProps {
   creditCards: CreditCard[];
@@ -110,7 +111,7 @@ export function CreditCardsTracker({
   const [activeCardIdForExpense, setActiveCardIdForExpense] = useState<string | null>(null);
   const [expenseConcept, setExpenseConcept] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
-  const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split("T")[0]);
+  const [expenseDate, setExpenseDate] = useState(todayLocalYmd());
   const [expenseError, setExpenseError] = useState("");
 
   const handleCreateCard = (e: React.FormEvent) => {

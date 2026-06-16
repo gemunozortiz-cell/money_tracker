@@ -253,7 +253,7 @@ export default function App() {
   const handleOptimizeRevolutSurplus = () => {
     if (!revolutInst || !preferredTargetInst || revolutExcess <= 0) return;
     const formattedAmount = revolutExcess.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const currentDateStr = simulatedDate.toISOString().split("T")[0];
+    const currentDateStr = `${simulatedDate.getFullYear()}-${String(simulatedDate.getMonth() + 1).padStart(2, "0")}-${String(simulatedDate.getDate()).padStart(2, "0")}`;
     addTransaction(revolutInst.id, "WITHDRAWAL", revolutExcess, `Optimización de Excedentes a ${preferredTargetInst.name}`, currentDateStr);
     addTransaction(preferredTargetInst.id, "DEPOSIT", revolutExcess, "Recepción de excedente optimizado de Revolut", currentDateStr);
     setOptimizationToast(`Excedente de $${formattedAmount} MXN transferido a ${preferredTargetInst.name}.`);

@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { TrendingUp, TrendingDown, Plus, Trash2, ArrowUpRight, ArrowDownRight, Globe, Layers, DollarSign, Calendar, Briefcase, PlusCircle, Check, X, Tag, Loader2, Search } from "lucide-react";
 import { CustomAsset, CustomAssetPurchase } from "../types";
+import { todayLocalYmd } from "../lib/dates";
 
 interface LookupResult {
   found: boolean;
@@ -51,7 +52,7 @@ export function CustomInvestmentsTracker({
 
   // Add Purchase form state
   const [purchaseAssetId, setPurchaseAssetId] = useState("");
-  const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split("T")[0]);
+  const [purchaseDate, setPurchaseDate] = useState(todayLocalYmd());
   const [purchaseMontoMxn, setPurchaseMontoMxn] = useState("");
   const [purchaseCantidadUnits, setPurchaseCantidadUnits] = useState("");
   const [purchaseFormError, setPurchaseFormError] = useState("");
