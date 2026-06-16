@@ -511,7 +511,7 @@ export function CreditCardsTracker({
                       <button type="button" onClick={() => setActiveCardIdForPayment(null)} className="text-[9px] text-slate-400 hover:text-white font-bold">Cancelar</button>
                     </div>
                     <p className="text-[9.5px] text-slate-350 leading-relaxed">
-                      Se restará el pago al saldo actual, se registrará el abono del pago en el glosario y <strong className="text-white">el vencimiento se postergará al siguiente periodo automáticamente</strong>.
+                      Se restará el pago al saldo actual, se registrará el abono del pago en el historial y <strong className="text-white">el vencimiento se postergará al siguiente periodo automáticamente</strong>.
                     </p>
                     <div className="flex gap-2">
                       <div className="relative flex-1">
@@ -606,7 +606,7 @@ export function CreditCardsTracker({
                   <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-2">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 font-display">
                       <ClipboardList className="w-3 h-3" />
-                      Glosario de Cargos ({expensesList.length})
+                      Historial de Cargos ({expensesList.length})
                     </span>
                     <button
                       onClick={() => {

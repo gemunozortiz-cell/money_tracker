@@ -544,18 +544,41 @@ export function usePortfolioState(userId: string | null = null) {
       date,
       category
     };
-    setState(prev => ({
-      ...prev,
-      cardExpenses: [expense, ...prev.cardExpenses]
-    }));
+    setState(prev => {
+      // If the card has a manual balance override, the auto-sum of expenses is
+      // bypassed — so a new charge would NOT show in the balance. Increment the
+      // manual balance by the charge amount so the new cargo is reflected.
+      const creditCards = prev.creditCards.map(cc =>
+        cc.id === cardId && cc.manualBalance !== undefined
+          ? { ...cc, manualBalance: Math.round((cc.manualBalance + amount) * 100) / 100 }
+          : cc
+      );
+      return {
+        ...prev,
+        creditCards,
+        cardExpenses: [expense, ...prev.cardExpenses]
+      };
+    });
     return id;
   };
 
   const deleteCardExpense = (id: string) => {
-    setState(prev => ({
-      ...prev,
-      cardExpenses: prev.cardExpenses.filter(ex => ex.id !== id)
-    }));
+    setState(prev => {
+      const removed = prev.cardExpenses.find(ex => ex.id === id);
+      // Keep manual balance in sync when deleting a charge from a manual-balance card
+      const creditCards = removed
+        ? prev.creditCards.map(cc =>
+            cc.id === removed.cardId && cc.manualBalance !== undefined
+              ? { ...cc, manualBalance: Math.max(0, Math.round((cc.manualBalance - removed.amount) * 100) / 100) }
+              : cc
+          )
+        : prev.creditCards;
+      return {
+        ...prev,
+        creditCards,
+        cardExpenses: prev.cardExpenses.filter(ex => ex.id !== id)
+      };
+    });
   };
 
   // Manual override OR async write from /api/categorize-expense
