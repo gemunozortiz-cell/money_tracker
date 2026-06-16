@@ -24,9 +24,13 @@ export interface FinancialInstrument {
   type: InstrumentType;
   initialBalance: number;
   currentBalance: number; // Dynamically updated or manual helper
-  annualRate?: number; // Only for DAILY_COMPOUND (e.g. 11.5 for 11.5%)
+  annualRate?: number; // Preferential annual rate (applies up to balanceCap, or to all if no cap)
   createdDate: string; // ISO String or YYYY-MM-DD
   isCash?: boolean; // True for physical cash / wallet accounts (no interest)
+  // Tiered rate: balance up to balanceCap earns annualRate; the excess earns excessRate.
+  // Example Nu Caja Turbo: balanceCap = 25000, annualRate = 13, excessRate = 0.
+  balanceCap?: number;
+  excessRate?: number;
 }
 
 export interface BitcoinPurchase {

@@ -422,7 +422,7 @@ export function usePortfolioState(userId: string | null = null) {
   };
 
   // INSTRUMENTS ACTIONS
-  const addInstrument = (name: string, rate: number, initialBalance: number) => {
+  const addInstrument = (name: string, rate: number, initialBalance: number, balanceCap?: number, excessRate?: number) => {
     const newInst: FinancialInstrument = {
       id: `inst-${Date.now()}`,
       name,
@@ -430,11 +430,35 @@ export function usePortfolioState(userId: string | null = null) {
       initialBalance,
       currentBalance: initialBalance,
       annualRate: rate,
-      createdDate: new Date().toISOString().split("T")[0]
+      createdDate: new Date().toISOString().split("T")[0],
+      ...(balanceCap !== undefined ? { balanceCap } : {}),
+      ...(excessRate !== undefined ? { excessRate } : {})
     };
     setState(prev => ({
       ...prev,
       instruments: [...prev.instruments, newInst]
+    }));
+  };
+
+  // Edit name, rate, balanceCap and excessRate of an existing instrument.
+  // Passing balanceCap as null clears the tiered config.
+  const updateInstrumentDetails = (
+    id: string,
+    fields: { name?: string; annualRate?: number; balanceCap?: number | null; excessRate?: number | null }
+  ) => {
+    setState(prev => ({
+      ...prev,
+      instruments: prev.instruments.map(inst => {
+        if (inst.id !== id) return inst;
+        const next: FinancialInstrument = { ...inst };
+        if (fields.name !== undefined) next.name = fields.name;
+        if (fields.annualRate !== undefined) next.annualRate = fields.annualRate;
+        if (fields.balanceCap === null) { delete next.balanceCap; delete next.excessRate; }
+        else if (fields.balanceCap !== undefined) next.balanceCap = fields.balanceCap;
+        if (fields.excessRate === null) delete next.excessRate;
+        else if (fields.excessRate !== undefined) next.excessRate = fields.excessRate;
+        return next;
+      })
     }));
   };
 
@@ -839,6 +863,12 @@ export function usePortfolioState(userId: string | null = null) {
 
           interestToday = grossInterestDaily - dailyWithholding;
           if (interestToday < 0) interestToday = 0;
+        } else if (inst.balanceCap !== undefined && inst.balanceCap > 0) {
+          // Tiered: up to cap earns annualRate, excess earns excessRate.
+          const capped = Math.min(currentBalance, inst.balanceCap);
+          const excess = Math.max(0, currentBalance - inst.balanceCap);
+          const excessR = (inst.excessRate || 0) / 100 / 365;
+          interestToday = capped * dailyRate + excess * excessR;
         } else {
           interestToday = currentBalance * dailyRate;
         }
@@ -1050,6 +1080,7 @@ export function usePortfolioState(userId: string | null = null) {
     clearAllData,
     addInstrument,
     addCashAccount,
+    updateInstrumentDetails,
     setUserProfile,
     deleteInstrument,
     addTransaction,

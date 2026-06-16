@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { PlusCircle, MinusCircle, Trash2, Calendar, TrendingUp, History, Wallet } from "lucide-react";
+import { PlusCircle, MinusCircle, Trash2, Calendar, TrendingUp, History, Wallet, Pencil } from "lucide-react";
 import { FinancialInstrument, Transaction } from "../types";
 
 interface InstrumentCardProps {
@@ -13,10 +13,11 @@ interface InstrumentCardProps {
   transactions: Transaction[];
   onAddTransaction: (instrumentId: string, type: "DEPOSIT" | "WITHDRAWAL", amount: number, concept?: string, date?: string) => void;
   onDeleteInstrument: (id: string) => void;
+  onEdit?: () => void;
   simulatedDate: Date;
 }
 
-export function InstrumentCard({ instrument, transactions, onAddTransaction, onDeleteInstrument, simulatedDate }: InstrumentCardProps) {
+export function InstrumentCard({ instrument, transactions, onAddTransaction, onDeleteInstrument, onEdit, simulatedDate }: InstrumentCardProps) {
   const [showDepositForm, setShowDepositForm] = useState(false);
   const [showWithdrawForm, setShowWithdrawForm] = useState(false);
   const [amount, setAmount] = useState<string>("");
@@ -82,14 +83,25 @@ export function InstrumentCard({ instrument, transactions, onAddTransaction, onD
           </span>
           <h3 className="font-extrabold text-white text-lg mt-1 font-display">{instrument.name}</h3>
         </div>
-        <button
-          onClick={() => onDeleteInstrument(instrument.id)}
-          className="text-slate-400 hover:text-red-400 hover:bg-white/5 p-1.5 rounded-lg transition-all cursor-pointer"
-          title="Eliminar instrumento"
-          id={`btn-del-${instrument.id}`}
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          {onEdit && (
+            <button
+              onClick={onEdit}
+              className="text-slate-400 hover:text-indigo-300 hover:bg-white/5 p-1.5 rounded-lg transition-all cursor-pointer"
+              title="Editar instrumento"
+            >
+              <Pencil className="w-4 h-4" />
+            </button>
+          )}
+          <button
+            onClick={() => onDeleteInstrument(instrument.id)}
+            className="text-slate-400 hover:text-red-400 hover:bg-white/5 p-1.5 rounded-lg transition-all cursor-pointer"
+            title="Eliminar instrumento"
+            id={`btn-del-${instrument.id}`}
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Main Stats Grid — hidden for cash (no rate, no interest) */}

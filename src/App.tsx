@@ -38,6 +38,7 @@ export default function App() {
     getHistoricalNetWorth,
     addInstrument,
     addCashAccount,
+    updateInstrumentDetails,
     setUserProfile,
     deleteInstrument,
     addTransaction,
@@ -149,6 +150,49 @@ export default function App() {
   const [newCashName, setNewCashName] = useState("Efectivo");
   const [newCashBalance, setNewCashBalance] = useState("");
   const [addCashError, setAddCashError] = useState("");
+  // Optional tiered config when creating an instrument
+  const [newInstCap, setNewInstCap] = useState("");
+  const [newInstExcessRate, setNewInstExcessRate] = useState("");
+  // Edit instrument modal
+  const [editingInstId, setEditingInstId] = useState<string | null>(null);
+  const [editInstName, setEditInstName] = useState("");
+  const [editInstRate, setEditInstRate] = useState("");
+  const [editInstCap, setEditInstCap] = useState("");
+  const [editInstExcessRate, setEditInstExcessRate] = useState("");
+  const [editInstError, setEditInstError] = useState("");
+
+  const openEditInstrument = (inst: any) => {
+    setEditingInstId(inst.id);
+    setEditInstName(inst.name);
+    setEditInstRate(String(inst.annualRate ?? ""));
+    setEditInstCap(inst.balanceCap !== undefined ? String(inst.balanceCap) : "");
+    setEditInstExcessRate(inst.excessRate !== undefined ? String(inst.excessRate) : "");
+    setEditInstError("");
+  };
+
+  const saveEditInstrument = () => {
+    const rate = parseFloat(editInstRate);
+    if (!editInstName.trim()) return setEditInstError("Nombre requerido.");
+    if (isNaN(rate) || rate < 0 || rate > 100) return setEditInstError("Tasa debe ser 0-100%.");
+    const capRaw = editInstCap.trim();
+    const excessRaw = editInstExcessRate.trim();
+    const fields: { name: string; annualRate: number; balanceCap?: number | null; excessRate?: number | null } = {
+      name: editInstName.trim(),
+      annualRate: rate,
+    };
+    if (capRaw === "") {
+      fields.balanceCap = null; // clears tiered config
+    } else {
+      const cap = parseFloat(capRaw);
+      if (isNaN(cap) || cap <= 0) return setEditInstError("Límite inválido.");
+      fields.balanceCap = cap;
+      const ex = excessRaw === "" ? 0 : parseFloat(excessRaw);
+      if (isNaN(ex) || ex < 0 || ex > 100) return setEditInstError("Tasa del excedente debe ser 0-100%.");
+      fields.excessRate = ex;
+    }
+    updateInstrumentDetails(editingInstId!, fields);
+    setEditingInstId(null);
+  };
   const [optimizationToast, setOptimizationToast] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [importError, setImportError] = useState<string>("");
@@ -176,17 +220,35 @@ export default function App() {
   const totalBtcValuationMxn = totalBtc * btc.priceMxn;
   const netWorthMxn = (totalTasaDiariaMxn + totalBtcValuationMxn + totalCustomAssetsValuationMxn) - totalDeudaTdcMxn;
 
-  // Revolut surplus optimization (preserved from original)
+  // Revolut surplus optimization — now respects the DESTINATION's balance cap so
+  // it never suggests overfilling a capped account (e.g. Nu Caja Turbo @ 25k).
   const revolutInst = computedInstruments.find(
     inst => inst.id === "inst-revolut" || inst.name.toLowerCase().includes("revolut")
   );
-  const preferredTargetInst = computedInstruments.find(
-    inst => inst.id === "inst-nu-turbo" || inst.name.toLowerCase().includes("nu caja turbo")
-  ) || computedInstruments.find(
-    inst => inst.id !== (revolutInst?.id || "") && (inst.annualRate || 0) > 7.0
-  );
-  const showRevolutOptimization = !!(revolutInst && revolutInst.currentBalance > 25000);
-  const revolutExcess = showRevolutOptimization ? Math.round((revolutInst!.currentBalance - 25000) * 100) / 100 : 0;
+
+  // Compute available headroom for a target instrument (Infinity if no cap).
+  const headroom = (inst: any) =>
+    inst.balanceCap !== undefined && inst.balanceCap > 0
+      ? Math.max(0, inst.balanceCap - inst.currentBalance)
+      : Infinity;
+
+  // Pick the best destination: a non-Revolut instrument with rate > 7% that still
+  // has room. Prefer Nu Caja Turbo; otherwise the highest-rate one with headroom.
+  const candidateTargets = computedInstruments
+    .filter(inst => inst.id !== (revolutInst?.id || "") && (inst.annualRate || 0) > 7.0 && !inst.isCash && headroom(inst) > 1)
+    .sort((a, b) => (b.annualRate || 0) - (a.annualRate || 0));
+  const preferredTargetInst =
+    candidateTargets.find(inst => inst.id === "inst-nu-turbo" || inst.name.toLowerCase().includes("nu caja turbo")) ||
+    candidateTargets[0];
+
+  const rawRevolutExcess = revolutInst && revolutInst.currentBalance > 25000
+    ? Math.round((revolutInst.currentBalance - 25000) * 100) / 100
+    : 0;
+  // Only move what fits in the destination.
+  const revolutExcess = preferredTargetInst
+    ? Math.min(rawRevolutExcess, headroom(preferredTargetInst))
+    : 0;
+  const showRevolutOptimization = !!(revolutInst && rawRevolutExcess > 0 && preferredTargetInst && revolutExcess > 1);
 
   const handleOptimizeRevolutSurplus = () => {
     if (!revolutInst || !preferredTargetInst || revolutExcess <= 0) return;
@@ -250,8 +312,17 @@ export default function App() {
     if (!newInstName.trim()) return setAddInstError("Nombre requerido.");
     if (isNaN(rate) || rate <= 0 || rate > 100) return setAddInstError("Tasa anual debe ser entre 0 y 100%.");
     if (isNaN(balance) || balance < 0) return setAddInstError("Saldo inicial inválido.");
-    addInstrument(newInstName.trim(), rate, balance);
-    setNewInstName(""); setNewInstRate(""); setNewInstBalance(""); setAddInstError("");
+    const capRaw = newInstCap.trim();
+    let cap: number | undefined;
+    let excessRate: number | undefined;
+    if (capRaw !== "") {
+      cap = parseFloat(capRaw);
+      if (isNaN(cap) || cap <= 0) return setAddInstError("Límite preferencial inválido.");
+      excessRate = newInstExcessRate.trim() === "" ? 0 : parseFloat(newInstExcessRate);
+      if (isNaN(excessRate) || excessRate < 0 || excessRate > 100) return setAddInstError("Tasa del excedente 0-100%.");
+    }
+    addInstrument(newInstName.trim(), rate, balance, cap, excessRate);
+    setNewInstName(""); setNewInstRate(""); setNewInstBalance(""); setNewInstCap(""); setNewInstExcessRate(""); setAddInstError("");
     setShowAddInstrument(false);
   };
 
@@ -513,6 +584,84 @@ export default function App() {
         </div>
       )}
 
+      {/* Edit instrument modal */}
+      {editingInstId && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
+          onClick={() => setEditingInstId(null)}
+        >
+          <div
+            className="bg-[#0e1424] rounded-t-3xl sm:rounded-3xl border-t sm:border border-white/10 w-full max-w-md p-5 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto"
+            style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <span className="text-[10px] uppercase font-extrabold text-emerald-300 tracking-widest">Editar instrumento</span>
+                <h3 className="text-sm font-black text-white font-display">Nombre, tasa y límites</h3>
+              </div>
+              <button onClick={() => setEditingInstId(null)} className="text-slate-400 hover:text-white p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] text-slate-400 font-bold uppercase mb-1">Nombre</label>
+                <input
+                  type="text" value={editInstName}
+                  onChange={e => setEditInstName(e.target.value)}
+                  className="w-full text-sm border border-white/10 bg-[#080d19] text-white rounded-lg p-2.5 focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-slate-400 font-bold uppercase mb-1">Tasa anual %</label>
+                <input
+                  type="number" step="0.01" value={editInstRate}
+                  onChange={e => setEditInstRate(e.target.value)}
+                  className="w-full text-sm border border-white/10 bg-[#080d19] text-white rounded-lg p-2.5 focus:outline-none focus:border-emerald-500 font-mono"
+                />
+              </div>
+              <div className="pt-1 border-t border-white/10">
+                <p className="text-[10px] uppercase font-bold text-indigo-300 tracking-widest mt-2 mb-1">Tasa escalonada (opcional)</p>
+                <p className="text-[10px] text-slate-500 mb-2 leading-snug">
+                  Ej. Nu Caja Turbo: límite $25,000 y excedente 0%. Deja el límite vacío para tasa única.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[9px] text-slate-400 font-bold uppercase mb-1">Límite preferencial $</label>
+                    <input
+                      type="number" step="0.01" placeholder="ej. 25000" value={editInstCap}
+                      onChange={e => setEditInstCap(e.target.value)}
+                      className="w-full text-sm border border-white/10 bg-[#080d19] text-white rounded-lg p-2.5 focus:outline-none focus:border-indigo-500 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] text-slate-400 font-bold uppercase mb-1">Tasa excedente %</label>
+                    <input
+                      type="number" step="0.01" placeholder="ej. 0" value={editInstExcessRate}
+                      onChange={e => setEditInstExcessRate(e.target.value)}
+                      className="w-full text-sm border border-white/10 bg-[#080d19] text-white rounded-lg p-2.5 focus:outline-none focus:border-indigo-500 font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {editInstError && <p className="text-xs text-rose-400 font-bold">{editInstError}</p>}
+
+              <div className="flex gap-2 pt-1">
+                <button onClick={saveEditInstrument} className="flex-1 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white font-bold text-sm py-2.5 rounded-lg shadow-md">
+                  Guardar cambios
+                </button>
+                <button onClick={() => setEditingInstId(null)} className="px-4 py-2.5 bg-white/5 border border-white/10 text-slate-300 hover:text-white text-sm font-bold rounded-lg">
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MAIN: scrollable content area */}
       <main
         className="max-w-3xl mx-auto px-4 pt-4"
@@ -630,6 +779,31 @@ export default function App() {
                     className="w-full text-sm border border-white/10 bg-[#0d1527] text-white rounded-lg p-2.5 focus:border-emerald-500 focus:outline-none"
                   />
                 </div>
+                <details className="group">
+                  <summary className="text-[11px] text-indigo-300 font-bold cursor-pointer select-none flex items-center gap-1">
+                    <span>Tasa escalonada (opcional)</span>
+                    <span className="text-slate-500 group-open:rotate-90 transition-transform inline-block">▸</span>
+                  </summary>
+                  <p className="text-[10px] text-slate-500 mt-1.5 mb-2 leading-snug">
+                    Para cajas con límite, ej. Nu Caja Turbo: 13% solo hasta $25,000, el excedente rinde menos.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="number" step="0.01"
+                      placeholder="Límite preferencial $"
+                      value={newInstCap}
+                      onChange={e => setNewInstCap(e.target.value)}
+                      className="w-full text-sm border border-white/10 bg-[#0d1527] text-white rounded-lg p-2.5 focus:border-indigo-500 focus:outline-none font-mono"
+                    />
+                    <input
+                      type="number" step="0.01"
+                      placeholder="Tasa excedente %"
+                      value={newInstExcessRate}
+                      onChange={e => setNewInstExcessRate(e.target.value)}
+                      className="w-full text-sm border border-white/10 bg-[#0d1527] text-white rounded-lg p-2.5 focus:border-indigo-500 focus:outline-none font-mono"
+                    />
+                  </div>
+                </details>
                 {addInstError && <p className="text-xs text-rose-400 font-bold">{addInstError}</p>}
                 <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white font-bold text-sm py-2.5 rounded-lg shadow-md">
                   Guardar
@@ -672,6 +846,7 @@ export default function App() {
                     transactions={state.transactions}
                     onAddTransaction={addTransaction}
                     onDeleteInstrument={deleteInstrument}
+                    onEdit={inst.isCash || inst.id === "inst-revolut" || inst.name.toLowerCase().includes("revolut") ? undefined : () => openEditInstrument(inst)}
                     simulatedDate={simulatedDate}
                   />
                 ))}
