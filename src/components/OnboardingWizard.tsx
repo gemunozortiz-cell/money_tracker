@@ -21,6 +21,7 @@ interface Question {
   key: keyof UserProfile;
   title: string;
   subtitle?: string;
+  multi?: boolean; // allow multiple selections
   options: { value: string; emoji: string; label: string }[];
 }
 
@@ -28,7 +29,8 @@ const QUESTIONS: Question[] = [
   {
     key: "goal",
     title: "¿Para qué quieres usar la app?",
-    subtitle: "Tu objetivo principal hoy",
+    subtitle: "Puedes elegir varias",
+    multi: true,
     options: [
       { value: "ahorrar", emoji: "🐖", label: "Ahorrar más" },
       { value: "salir-deudas", emoji: "💳", label: "Salir de deudas" },
@@ -123,14 +125,34 @@ export function OnboardingWizard({ initial, onComplete, onSkip }: OnboardingWiza
   const q = QUESTIONS[step];
   const progress = ((step + 1) / QUESTIONS.length) * 100;
 
-  const choose = (value: string) => {
-    const updated = { ...answers, [q.key]: value };
-    setAnswers(updated);
+  // For multi-select questions, the value is a comma-separated string.
+  const currentValue = (answers[q.key] as string) || "";
+  const selectedSet = new Set(currentValue ? currentValue.split(",") : []);
+
+  const advance = (updated: UserProfile) => {
     if (isLast) {
       onComplete({ ...updated, completedAt: new Date().toISOString(), skipped: false });
     } else {
-      setTimeout(() => setStep(step + 1), 180); // brief highlight before advancing
+      setStep(step + 1);
     }
+  };
+
+  const choose = (value: string) => {
+    if (q.multi) {
+      // Toggle within the set; do NOT auto-advance (user taps "Continuar")
+      if (selectedSet.has(value)) selectedSet.delete(value);
+      else selectedSet.add(value);
+      setAnswers({ ...answers, [q.key]: Array.from(selectedSet).join(",") });
+    } else {
+      const updated = { ...answers, [q.key]: value };
+      setAnswers(updated);
+      setTimeout(() => advance(updated), 180); // brief highlight before advancing
+    }
+  };
+
+  const continueMulti = () => {
+    if (selectedSet.size === 0) return;
+    advance(answers);
   };
 
   return (
@@ -163,7 +185,7 @@ export function OnboardingWizard({ initial, onComplete, onSkip }: OnboardingWiza
 
           <div className="space-y-2.5 mt-6">
             {q.options.map(opt => {
-              const selected = answers[q.key] === opt.value;
+              const selected = q.multi ? selectedSet.has(opt.value) : answers[q.key] === opt.value;
               return (
                 <button
                   key={opt.value}
@@ -181,6 +203,17 @@ export function OnboardingWizard({ initial, onComplete, onSkip }: OnboardingWiza
               );
             })}
           </div>
+
+          {/* Continue button for multi-select questions */}
+          {q.multi && (
+            <button
+              onClick={continueMulti}
+              disabled={selectedSet.size === 0}
+              className="w-full mt-5 bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 disabled:bg-white/10 disabled:text-slate-500 text-white font-bold text-sm py-3 rounded-xl transition-colors"
+            >
+              {selectedSet.size === 0 ? "Elige al menos una" : isLast ? "Terminar" : `Continuar (${selectedSet.size})`}
+            </button>
+          )}
         </div>
       </div>
 
@@ -188,7 +221,7 @@ export function OnboardingWizard({ initial, onComplete, onSkip }: OnboardingWiza
       <div className="px-5 py-3 text-center">
         <p className="text-[10px] text-slate-500 flex items-center justify-center gap-1">
           <Sparkles className="w-3 h-3 text-indigo-400" />
-          {isLast ? "Toca una opción para terminar" : "Toca tu respuesta para continuar"}
+          {q.multi ? "Elige todas las que apliquen" : isLast ? "Toca una opción para terminar" : "Toca tu respuesta para continuar"}
         </p>
       </div>
     </div>

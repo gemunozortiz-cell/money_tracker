@@ -85,7 +85,10 @@ function describeUserProfile(p: any): string {
     "corto": "Corto plazo (<1 año)", "mediano": "Mediano plazo (1-5 años)", "largo": "Largo plazo (5+ años)"
   };
   const lines: string[] = [];
-  if (p.goal) lines.push(`  - Objetivo principal: ${goalMap[p.goal] || p.goal}`);
+  if (p.goal) {
+    const goals = String(p.goal).split(",").map((g: string) => goalMap[g.trim()] || g.trim()).join(", ");
+    lines.push(`  - Objetivos: ${goals}`);
+  }
   if (p.ageRange) lines.push(`  - Edad: ${p.ageRange} años`);
   if (p.occupation) lines.push(`  - Ocupación: ${p.occupation}`);
   if (p.incomeRange) lines.push(`  - Ingreso mensual aprox: $${p.incomeRange} MXN`);

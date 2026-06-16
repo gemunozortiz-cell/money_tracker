@@ -22,7 +22,7 @@ import { MarketsAndNews } from "./components/MarketsAndNews";
 import { OnboardingWizard } from "./components/OnboardingWizard";
 import {
   PiggyBank, PlusCircle, Zap, RotateCcw, Settings, X,
-  Download, Upload, Trash2, LogOut, Cloud, CloudOff, Loader2 as Spinner, CheckCircle2, AlertCircle
+  Download, Upload, Trash2, LogOut, Cloud, CloudOff, Loader2 as Spinner, CheckCircle2, AlertCircle, Sparkles
 } from "lucide-react";
 
 export default function App() {
