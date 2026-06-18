@@ -465,19 +465,28 @@ export default function App() {
 
       {/* Settings drawer */}
       {showSettings && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4" onClick={() => setShowSettings(false)}>
+        <div
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
+          style={{ paddingTop: "env(safe-area-inset-top)" }}
+          onClick={() => setShowSettings(false)}
+        >
           <div
-            className="bg-[#0e1424] rounded-t-3xl sm:rounded-3xl border-t sm:border border-white/10 w-full max-w-md p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto"
-            style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
+            className="bg-[#0e1424] rounded-t-3xl sm:rounded-3xl border-t sm:border border-white/10 w-full max-w-md shadow-2xl flex flex-col max-h-[88dvh]"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+            {/* Fixed header */}
+            <div className="flex items-center justify-between border-b border-white/10 p-5 pb-3 flex-shrink-0">
               <h3 className="text-base font-extrabold text-white font-display">Ajustes</h3>
-              <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-white p-1 -mr-1">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
+            {/* Scrollable body */}
+            <div
+              className="overflow-y-auto p-5 pt-4 space-y-4"
+              style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
+            >
             <div>
               <h4 className="text-[10px] uppercase font-extrabold text-slate-400 tracking-widest mb-2">Máquina del tiempo</h4>
               <div className="flex flex-wrap gap-2">
@@ -580,6 +589,7 @@ export default function App() {
                 </button>
               </div>
             </div>
+            </div>
           </div>
         </div>
       )}
@@ -591,7 +601,7 @@ export default function App() {
           onClick={() => setEditingInstId(null)}
         >
           <div
-            className="bg-[#0e1424] rounded-t-3xl sm:rounded-3xl border-t sm:border border-white/10 w-full max-w-md p-5 shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto"
+            className="bg-[#0e1424] rounded-t-3xl sm:rounded-3xl border-t sm:border border-white/10 w-full max-w-md p-5 shadow-2xl animate-fade-in max-h-[88dvh] overflow-y-auto"
             style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
             onClick={e => e.stopPropagation()}
           >

@@ -224,7 +224,7 @@ export function CreditCardsCalendar({ creditCards, simulatedDate }: CreditCardsC
           onClick={() => setSelectedDay(null)}
         >
           <div
-            className="bg-[#0e1424] rounded-t-3xl border-t border-white/10 w-full max-w-md p-5 shadow-2xl animate-fade-in max-h-[85vh] overflow-y-auto"
+            className="bg-[#0e1424] rounded-t-3xl border-t border-white/10 w-full max-w-md p-5 shadow-2xl animate-fade-in max-h-[85dvh] overflow-y-auto"
             style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
             onClick={(e) => e.stopPropagation()}
           >
