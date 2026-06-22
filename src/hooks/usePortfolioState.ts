@@ -29,7 +29,20 @@ export interface PortfolioState {
   userProfile?: UserProfile; // onboarding answers (optional)
 }
 
-const INITIAL_STATE: PortfolioState = {
+// Empty starting point for brand-new users (and local-only first run).
+const EMPTY_STATE: PortfolioState = {
+  instruments: [],
+  btcPurchases: [],
+  customAssets: [],
+  customAssetPurchases: [],
+  creditCards: [],
+  cardExpenses: [],
+  transactions: [],
+  currentDateOffsetDays: 0
+};
+
+// Demo data — loaded only when the user taps "Cargar ejemplo" / "Reset demo".
+const DEMO_STATE: PortfolioState = {
   instruments: [
     {
       id: "inst-nu-turbo",
@@ -176,6 +189,9 @@ const INITIAL_STATE: PortfolioState = {
   customAssetPurchases: [],
   currentDateOffsetDays: 0 // Allows adjusting date dynamically to simulate future compound accumulation!
 };
+
+// New users / local-only first run start EMPTY. Demo is opt-in.
+const INITIAL_STATE: PortfolioState = EMPTY_STATE;
 
 export function usePortfolioState(userId: string | null = null) {
   const [state, setState] = useState<PortfolioState>(() => {
@@ -396,22 +412,13 @@ export function usePortfolioState(userId: string | null = null) {
     return () => window.removeEventListener("beforeunload", handler);
   }, [userId]);
 
-  // Reset helper
+  // Load the demo dataset (opt-in, for exploring the app). Keeps the user's profile.
   const resetToDemo = () => {
-    setState(INITIAL_STATE);
+    setState(prev => ({ ...DEMO_STATE, userProfile: prev.userProfile }));
   };
 
   const clearAllData = () => {
-    setState({
-      instruments: [],
-      btcPurchases: [],
-      customAssets: [],
-      customAssetPurchases: [],
-      creditCards: [],
-      cardExpenses: [],
-      transactions: [],
-      currentDateOffsetDays: 0
-    });
+    setState(prev => ({ ...EMPTY_STATE, userProfile: prev.userProfile }));
   };
 
   // Modify Simulated Time Offset

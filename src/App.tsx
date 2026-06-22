@@ -657,14 +657,14 @@ export default function App() {
             )}
 
             <div>
-              <h4 className="text-[10px] uppercase font-extrabold text-slate-400 tracking-widest mb-2">Zona de riesgo</h4>
+              <h4 className="text-[10px] uppercase font-extrabold text-slate-400 tracking-widest mb-2">Datos</h4>
               <div className="grid grid-cols-2 gap-2">
                 <button
-                  onClick={() => { if (confirm("¿Restaurar datos demo? Se perderá tu información actual.")) { resetToDemo(); setShowSettings(false); } }}
+                  onClick={() => { if (confirm("¿Cargar datos de ejemplo? Reemplazará lo que tengas ahora con cuentas y tarjetas de muestra para explorar.")) { resetToDemo(); setShowSettings(false); } }}
                   className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  Reset Demo
+                  Cargar ejemplo
                 </button>
                 <button
                   onClick={() => { if (confirm("¿Borrar TODO? Esta acción no se puede deshacer.")) { clearAllData(); setShowSettings(false); } }}
@@ -674,6 +674,7 @@ export default function App() {
                   Limpiar todo
                 </button>
               </div>
+              <p className="text-[10px] text-slate-500 mt-2">Empiezas con todo vacío. Usa "Cargar ejemplo" solo si quieres ver cómo se ve la app con datos de muestra.</p>
             </div>
             </div>
           </div>
