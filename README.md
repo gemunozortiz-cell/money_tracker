@@ -48,11 +48,29 @@ A mobile-first PWA for tracking Mexican savings instruments (Nu, Revolut, CETES)
 - Row-level security: each user only reads their own row
 - localStorage offline cache + `beforeunload` flush safety net
 
+### Onboarding & personalization
+- Typeform-style onboarding wizard (8 questions, multi-select) collected after signup
+- Financial profile (goals, age, income, savings capacity, risk tolerance, horizon) is injected into the Gemini prompt so advice is tailored to each user
+- Editable anytime from Settings
+
+### Configurable savings instruments
+- Per-instrument **tiered rates**: e.g. Nu Caja Turbo earns 13% only up to a $25k cap, the excess earns a configurable lower rate
+- Edit name, rate, cap and excess rate of any account in place
+- **Cash accounts** for wallet money (counts toward net worth, no interest)
+- Smart surplus optimizer that respects each destination's cap before suggesting a transfer
+
+### Daily reminders (Web Push)
+- Native push notifications via VAPID + service worker — arrive even when the app is closed
+- Per-user reminder hour stored in UTC; an external cron hits the server hourly and notifies only the users due at that hour
+- In-app fallback banner when no expense/income was logged today
+- Expired subscriptions auto-pruned (404/410 cleanup)
+
 ### iPhone-native feel
 - PWA installable on home screen
 - Bottom tab bar with safe-area insets for the notch
+- Modals use `dvh` + safe-area insets so nothing clips under the notch or home indicator
 - 100% dark theme, smooth animations
-- Service worker caches static assets for resilience
+- Service worker (network-first for HTML, cache for hashed assets)
 
 ---
 
@@ -66,6 +84,7 @@ A mobile-first PWA for tracking Mexican savings instruments (Nu, Revolut, CETES)
 | **AI** | Google Gemini 2.5 Flash + 2.0 Flash (fallback model) |
 | **Live market data** | CoinGecko · Yahoo Finance · exchangerate.host |
 | **News** | RSS aggregation (Bloomberg, CoinDesk, El Economista, Investing.com) |
+| **Push** | Web Push API + VAPID (`web-push`) · external cron scheduler |
 | **Hosting** | Render.com (auto-deploy from GitHub `main`) |
 | **Caching** | In-memory TTL cache (30s–10min) + per-IP rate limiter on AI endpoints |
 
@@ -87,13 +106,15 @@ A mobile-first PWA for tracking Mexican savings instruments (Nu, Revolut, CETES)
                   │  /api/news        (RSS)          │
                   │  /api/financial-advisor (Gemini) │
                   │  /api/categorize-expense (Gemini)│
+                  │  /api/push/* (Web Push / VAPID)  │
                   └──────────────────────────────────┘
-                                       │
-                  ┌────────────────────┴───────────────┐
-                  ▼                                    ▼
-       Upstream third-party APIs        Supabase (Postgres)
-       (with cache + rate limit)        ↕ Realtime websocket ↕
-                                        (state sync across devices)
+                          │                  ▲
+                          │                  │ hourly POST
+                          ▼                  │
+       Upstream third-party APIs    External cron (cron-job.org)
+       + Supabase (Postgres)        → fires daily 9pm reminders
+       ↕ Realtime websocket ↕
+       (state sync across devices)
 ```
 
 ### Key design decisions
@@ -119,9 +140,13 @@ npm install
 # Configure
 cp .env.example .env
 #  Then edit .env with:
-#  GEMINI_API_KEY=...          (aistudio.google.com/apikey — free)
-#  VITE_SUPABASE_URL=...       (your Supabase project URL)
-#  VITE_SUPABASE_ANON_KEY=...  (anon public key)
+#  GEMINI_API_KEY=...               (aistudio.google.com/apikey — free)
+#  VITE_SUPABASE_URL=...            (your Supabase project URL)
+#  VITE_SUPABASE_ANON_KEY=...       (anon public key)
+#  --- optional, for push notifications ---
+#  VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY   (npx web-push generate-vapid-keys)
+#  SUPABASE_SERVICE_ROLE_KEY=...    (server reads push subs for the cron)
+#  CRON_SECRET=...                  (protects the reminder endpoint)
 
 # Run
 npm run dev    # http://localhost:3000
@@ -144,7 +169,28 @@ create policy "Users update own portfolio" on public.portfolios for update using
 -- Required for live cross-device updates
 alter publication supabase_realtime add table public.portfolios;
 grant select, insert, update on table public.portfolios to authenticated;
+
+-- Push notification subscriptions (server writes via service_role)
+create table public.push_subscriptions (
+  endpoint          text primary key,
+  user_id           uuid not null references auth.users(id) on delete cascade,
+  subscription      jsonb not null,
+  reminder_hour_utc int not null default 3,
+  updated_at        timestamptz not null default now()
+);
+alter table public.push_subscriptions enable row level security;
+grant all on table public.push_subscriptions to service_role;
 ```
+
+### Daily reminder scheduler
+
+Point any cron service (e.g. [cron-job.org](https://cron-job.org), free) to fire **hourly**:
+
+```
+POST https://<your-app>.onrender.com/api/push/send-reminders?secret=<CRON_SECRET>
+```
+
+The endpoint sends the reminder only to users whose `reminder_hour_utc` matches the current UTC hour.
 
 ---
 
@@ -161,12 +207,15 @@ The server binds to `process.env.PORT` (set by Render) or `3000` locally. Config
 
 ## 🗺 Roadmap
 
+- [x] Real-time cross-device sync (Supabase Realtime)
+- [x] AI advisor personalized via onboarding profile
+- [x] Configurable tiered savings rates + cash accounts
+- [x] Daily push-notification reminders (Web Push + VAPID + cron)
 - [ ] Mexican bank integration via [Belvo API](https://belvo.com)
-- [ ] PWA push notifications (alert 3 days before each card's due date)
 - [ ] Income tracking + savings-rate calculation
 - [ ] Recurring expense auto-detection (subscriptions)
 - [ ] CSV import from common bank exports
-- [ ] AI advisor that uses categorized expense history
+- [ ] AI advisor that uses full categorized expense history
 
 ---
 
