@@ -20,10 +20,13 @@ import { ExpenseCategoryChart } from "./components/ExpenseCategoryChart";
 import { CustomInvestmentsTracker } from "./components/CustomInvestmentsTracker";
 import { MarketsAndNews } from "./components/MarketsAndNews";
 import { OnboardingWizard } from "./components/OnboardingWizard";
+import { getPushState, subscribeToPush, unsubscribeFromPush } from "./lib/push";
 import {
   PiggyBank, PlusCircle, Zap, RotateCcw, Settings, X,
-  Download, Upload, Trash2, LogOut, Cloud, CloudOff, Loader2 as Spinner, CheckCircle2, AlertCircle, Sparkles
+  Download, Upload, Trash2, LogOut, Cloud, CloudOff, Loader2 as Spinner, CheckCircle2, AlertCircle, Sparkles, Bell, ChevronRight
 } from "lucide-react";
+
+const REMINDER_LOCAL_HOUR = 21; // 9:00 PM local
 
 export default function App() {
   const { user, signOut, configured: authConfigured } = useAuth();
@@ -196,6 +199,42 @@ export default function App() {
   const [optimizationToast, setOptimizationToast] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [importError, setImportError] = useState<string>("");
+  // Push notifications state
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushSupported, setPushSupported] = useState(true);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushMsg, setPushMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+
+  useEffect(() => {
+    getPushState().then(s => {
+      setPushSupported(s.supported);
+      setPushSubscribed(s.subscribed && s.permission === "granted");
+    });
+  }, [user?.id]);
+
+  const handleTogglePush = async () => {
+    if (!user) return;
+    setPushBusy(true);
+    setPushMsg(null);
+    try {
+      if (pushSubscribed) {
+        await unsubscribeFromPush();
+        setPushSubscribed(false);
+        setPushMsg({ kind: "ok", text: "Notificaciones desactivadas." });
+      } else {
+        const r = await subscribeToPush(user.id, REMINDER_LOCAL_HOUR);
+        if (r.ok) {
+          setPushSubscribed(true);
+          setPushMsg({ kind: "ok", text: "¡Listo! Te recordaremos a las 9 PM. Revisa que llegó una notificación de prueba." });
+        } else {
+          setPushMsg({ kind: "error", text: r.error || "No se pudo activar." });
+        }
+      }
+    } finally {
+      setPushBusy(false);
+      setTimeout(() => setPushMsg(null), 8000);
+    }
+  };
   // Onboarding: show after sign-in if no profile yet (and not skipped this session)
   const [skippedOnboardingThisSession, setSkippedOnboardingThisSession] = useState(false);
   const [forceOnboarding, setForceOnboarding] = useState(false); // when editing profile from Settings
@@ -259,6 +298,14 @@ export default function App() {
     setOptimizationToast(`Excedente de $${formattedAmount} MXN transferido a ${preferredTargetInst.name}.`);
     setTimeout(() => setOptimizationToast(null), 5000);
   };
+
+  // Did the user register anything (expense/transaction) today? (for in-app reminder)
+  const registeredToday = useMemo(() => {
+    const t = `${simulatedDate.getFullYear()}-${String(simulatedDate.getMonth() + 1).padStart(2, "0")}-${String(simulatedDate.getDate()).padStart(2, "0")}`;
+    const expenseToday = state.cardExpenses.some(ex => ex.date === t);
+    const txToday = state.transactions.some(tx => tx.date === t);
+    return expenseToday || txToday;
+  }, [state.cardExpenses, state.transactions, simulatedDate]);
 
   // Count cards with debt nearing due date (for tab badge)
   const debtAlertCount = useMemo(() => {
@@ -518,6 +565,45 @@ export default function App() {
               <p className="text-[10px] text-slate-500 mt-2">Tus respuestas personalizan los consejos de la IA.</p>
             </div>
 
+            {authConfigured && user && (
+              <div>
+                <h4 className="text-[10px] uppercase font-extrabold text-slate-400 tracking-widest mb-2">Recordatorio diario</h4>
+                {pushSupported ? (
+                  <>
+                    <button
+                      onClick={handleTogglePush}
+                      disabled={pushBusy}
+                      className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-xs font-bold border transition-colors ${
+                        pushSubscribed
+                          ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20"
+                          : "bg-indigo-500/10 text-indigo-300 border-indigo-500/30 hover:bg-indigo-500/20"
+                      } disabled:opacity-50`}
+                    >
+                      <span className="flex items-center gap-2">
+                        {pushBusy ? <Spinner className="w-3.5 h-3.5 animate-spin" /> : <Bell className="w-3.5 h-3.5" />}
+                        {pushSubscribed ? "Notificaciones activadas (9 PM)" : "Activar recordatorio a las 9 PM"}
+                      </span>
+                      <span className={`w-9 h-5 rounded-full flex items-center px-0.5 transition-colors ${pushSubscribed ? "bg-emerald-500 justify-end" : "bg-white/15 justify-start"}`}>
+                        <span className="w-4 h-4 rounded-full bg-white block" />
+                      </span>
+                    </button>
+                    {pushMsg && (
+                      <p className={`text-[10px] mt-2 leading-snug ${pushMsg.kind === "ok" ? "text-emerald-300" : "text-rose-400"}`}>
+                        {pushMsg.text}
+                      </p>
+                    )}
+                    <p className="text-[10px] text-slate-500 mt-2 leading-snug">
+                      Recibirás una notificación diaria a las 9 PM para registrar tus gastos. Requiere que la app esté instalada en tu pantalla de inicio.
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-[10px] text-slate-500 leading-snug">
+                    Tu dispositivo/navegador no soporta notificaciones push. En iPhone, instala la app en tu pantalla de inicio (Compartir → Añadir a inicio) y vuelve a abrir desde ahí.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div>
               <h4 className="text-[10px] uppercase font-extrabold text-slate-400 tracking-widest mb-2">Respaldo</h4>
               <div className="grid grid-cols-2 gap-2">
@@ -679,6 +765,21 @@ export default function App() {
       >
         {/* INICIO */}
         {activeTab === "inicio" && (
+          <div className="space-y-5">
+            {/* In-app daily reminder: only when nothing registered today */}
+            {!registeredToday && (
+              <button
+                onClick={() => setActiveTab("tarjetas")}
+                className="w-full bg-gradient-to-r from-indigo-500/15 to-violet-500/10 border border-indigo-500/30 rounded-2xl p-3.5 flex items-center gap-3 text-left active:scale-[0.99] transition-transform"
+              >
+                <span className="text-xl flex-shrink-0">📝</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-extrabold text-white">¿Ya registraste tus gastos de hoy?</p>
+                  <p className="text-[11px] text-slate-300 mt-0.5">Mantén tu portafolio al día. Toca para registrar.</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-indigo-300 flex-shrink-0" />
+              </button>
+            )}
           <HomeDashboard
             netWorthMxn={netWorthMxn}
             totalTasaDiariaMxn={totalTasaDiariaMxn}
@@ -702,6 +803,7 @@ export default function App() {
             historicalSeries={historicalSeries}
             historicalLoading={historicalLoading}
           />
+          </div>
         )}
 
         {/* CUENTAS */}

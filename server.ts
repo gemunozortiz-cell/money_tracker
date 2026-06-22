@@ -8,8 +8,35 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
+import webpush from "web-push";
+import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
+
+// ============================================================
+// Web Push (VAPID) setup. Keys generated once via `npx web-push generate-vapid-keys`
+// and stored in env. If missing, push features are disabled gracefully.
+// ============================================================
+const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY || "";
+const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || "";
+const PUSH_ENABLED = !!(VAPID_PUBLIC && VAPID_PRIVATE);
+if (PUSH_ENABLED) {
+  webpush.setVapidDetails(
+    "mailto:gemunozortiz@gmail.com",
+    VAPID_PUBLIC,
+    VAPID_PRIVATE
+  );
+}
+
+// Server-side Supabase client (service role) to read push subscriptions for the cron.
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const adminSupabase = (SUPABASE_URL && SUPABASE_SERVICE_KEY)
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+  : null;
+
+// Secret that protects the cron endpoint from public abuse.
+const CRON_SECRET = process.env.CRON_SECRET || "";
 
 // ============================================================
 // In-memory TTL cache shared by upstream-API endpoints.
@@ -764,6 +791,114 @@ Responde SOLO el id (ej. "restaurantes"), sin explicar. Si dudas, usa "otro".`;
       return res.json({ category: sanitizeCategory(text) });
     } catch (err: any) {
       return res.json({ category: "otro", isFallback: true, error: err?.message });
+    }
+  });
+
+  // ============================================================
+  // PUSH NOTIFICATIONS
+  // ============================================================
+
+  // Expose the public VAPID key so the client can subscribe.
+  app.get("/api/push/vapid-public-key", (_req, res) => {
+    res.json({ key: VAPID_PUBLIC, enabled: PUSH_ENABLED });
+  });
+
+  // Save / update a push subscription for a user.
+  // Body: { userId, subscription, reminderHourUtc }
+  app.post("/api/push/subscribe", async (req, res) => {
+    if (!PUSH_ENABLED || !adminSupabase) {
+      return res.status(503).json({ error: "Push no configurado en el servidor." });
+    }
+    try {
+      const { userId, subscription, reminderHourUtc } = req.body || {};
+      if (!userId || !subscription?.endpoint) {
+        return res.status(400).json({ error: "Faltan userId o subscription." });
+      }
+      const { error } = await adminSupabase.from("push_subscriptions").upsert({
+        endpoint: subscription.endpoint,
+        user_id: userId,
+        subscription,
+        reminder_hour_utc: reminderHourUtc ?? 3, // default 3am UTC ≈ 9pm MX
+        updated_at: new Date().toISOString()
+      }, { onConflict: "endpoint" });
+      if (error) throw error;
+      return res.json({ ok: true });
+    } catch (e: any) {
+      return res.status(500).json({ error: e?.message || "Error al guardar suscripción" });
+    }
+  });
+
+  // Remove a subscription (when user turns notifications off).
+  app.post("/api/push/unsubscribe", async (req, res) => {
+    if (!adminSupabase) return res.status(503).json({ error: "No configurado" });
+    try {
+      const { endpoint } = req.body || {};
+      if (!endpoint) return res.status(400).json({ error: "Falta endpoint" });
+      await adminSupabase.from("push_subscriptions").delete().eq("endpoint", endpoint);
+      return res.json({ ok: true });
+    } catch (e: any) {
+      return res.status(500).json({ error: e?.message });
+    }
+  });
+
+  // Send a test push to a single subscription right now.
+  app.post("/api/push/test", async (req, res) => {
+    if (!PUSH_ENABLED) return res.status(503).json({ error: "Push no configurado" });
+    try {
+      const { subscription } = req.body || {};
+      if (!subscription?.endpoint) return res.status(400).json({ error: "Falta subscription" });
+      await webpush.sendNotification(subscription, JSON.stringify({
+        title: "Control de Portafolio",
+        body: "✅ Notificaciones activadas. Te recordaremos registrar tus gastos.",
+        url: "/"
+      }));
+      return res.json({ ok: true });
+    } catch (e: any) {
+      return res.status(500).json({ error: e?.message || "Error enviando push de prueba" });
+    }
+  });
+
+  // CRON endpoint: called hourly by an external scheduler (cron-job.org).
+  // Sends the daily reminder to every subscription whose reminder_hour_utc == current UTC hour.
+  app.post("/api/push/send-reminders", async (req, res) => {
+    if (!PUSH_ENABLED || !adminSupabase) return res.status(503).json({ error: "Push no configurado" });
+    const secret = req.query.secret || req.headers["x-cron-secret"];
+    if (!CRON_SECRET || secret !== CRON_SECRET) {
+      return res.status(401).json({ error: "No autorizado" });
+    }
+    try {
+      const currentUtcHour = new Date().getUTCHours();
+      const { data, error } = await adminSupabase
+        .from("push_subscriptions")
+        .select("endpoint, subscription, reminder_hour_utc")
+        .eq("reminder_hour_utc", currentUtcHour);
+      if (error) throw error;
+
+      const subs = data || [];
+      let sent = 0;
+      const deadEndpoints: string[] = [];
+      await Promise.all(subs.map(async (row: any) => {
+        try {
+          await webpush.sendNotification(row.subscription, JSON.stringify({
+            title: "📝 Control de Portafolio",
+            body: "¿Ya registraste tus gastos e ingresos de hoy? Tócame para actualizar tu portafolio.",
+            url: "/"
+          }));
+          sent++;
+        } catch (err: any) {
+          // 404/410 = subscription expired; clean it up
+          if (err?.statusCode === 404 || err?.statusCode === 410) {
+            deadEndpoints.push(row.endpoint);
+          }
+        }
+      }));
+
+      if (deadEndpoints.length > 0) {
+        await adminSupabase.from("push_subscriptions").delete().in("endpoint", deadEndpoints);
+      }
+      return res.json({ ok: true, hour: currentUtcHour, candidates: subs.length, sent, cleaned: deadEndpoints.length });
+    } catch (e: any) {
+      return res.status(500).json({ error: e?.message || "Error enviando recordatorios" });
     }
   });
 

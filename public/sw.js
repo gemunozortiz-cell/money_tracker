@@ -4,8 +4,9 @@
 //   - Hashed assets (/assets/*): cache-first (safe, content-hashed by Vite)
 //   - /api/*: network-first with cache fallback
 //   - Other same-origin GET: stale-while-revalidate
+//   - Push notifications: show + focus/open app on click
 
-const VERSION = "v4";
+const VERSION = "v5";
 const STATIC_CACHE = `portafolio-static-${VERSION}`;
 const API_CACHE = `portafolio-api-${VERSION}`;
 
@@ -72,6 +73,42 @@ self.addEventListener("fetch", (event) => {
         return res;
       }).catch(() => cached);
       return cached || network;
+    })
+  );
+});
+
+// ============================================================
+// PUSH NOTIFICATIONS
+// ============================================================
+self.addEventListener("push", (event) => {
+  let payload = { title: "Control de Portafolio", body: "Tienes un recordatorio.", url: "/" };
+  try {
+    if (event.data) payload = { ...payload, ...event.data.json() };
+  } catch (e) {
+    if (event.data) payload.body = event.data.text();
+  }
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: "/icon.svg",
+      badge: "/icon.svg",
+      data: { url: payload.url || "/" },
+      vibrate: [80, 40, 80],
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.url) || "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      // Focus an existing window if open
+      for (const client of clients) {
+        if ("focus" in client) return client.focus();
+      }
+      // Otherwise open a new one
+      if (self.clients.openWindow) return self.clients.openWindow(targetUrl);
     })
   );
 });
