@@ -5,6 +5,24 @@
 
 import { useEffect, useState, useCallback } from "react";
 
+/**
+ * Re-run `refresh` whenever the user returns to the app (tab becomes visible or
+ * window regains focus). Mobile browsers suspend timers in the background and
+ * the Render backend may have been asleep, so a fresh fetch on return keeps
+ * prices current instead of waiting for the next interval tick.
+ */
+function useRefreshOnVisible(refresh: () => void) {
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", refresh);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [refresh]);
+}
+
 export interface BtcLiveData {
   priceMxn: number;
   priceUsd: number;
@@ -83,17 +101,9 @@ export function useLiveBtc() {
   useEffect(() => {
     refresh();
     const id = setInterval(refresh, 30_000);
-    // Refetch immediately when the user returns to the tab/app (Render may have
-    // been asleep, or the interval was throttled in background).
-    const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", refresh);
-    return () => {
-      clearInterval(id);
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", refresh);
-    };
+    return () => clearInterval(id);
   }, [refresh]);
+  useRefreshOnVisible(refresh);
 
   return { ...data, refresh };
 }
@@ -128,6 +138,7 @@ export function useLiveFx() {
     const id = setInterval(refresh, 5 * 60_000);
     return () => clearInterval(id);
   }, [refresh]);
+  useRefreshOnVisible(refresh);
 
   return { ...data, refresh };
 }
@@ -168,6 +179,7 @@ export function useLiveStocks(symbols: string[]) {
     const id = setInterval(refresh, 60_000);
     return () => clearInterval(id);
   }, [refresh]);
+  useRefreshOnVisible(refresh);
 
   return { ...data, refresh };
 }
@@ -269,6 +281,7 @@ export function useLiveNews() {
     const id = setInterval(refresh, 10 * 60_000);
     return () => clearInterval(id);
   }, [refresh]);
+  useRefreshOnVisible(refresh);
 
   return { ...data, refresh };
 }

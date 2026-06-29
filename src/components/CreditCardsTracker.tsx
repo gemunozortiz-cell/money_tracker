@@ -3,11 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { CreditCard as CardIcon, Calendar, Trash2, Plus, AlertCircle, TrendingDown, ClipboardList, Tag, X, Loader2, FastForward, Pencil } from "lucide-react";
 import { CreditCard, CreditCardExpense } from "../types";
 import { EXPENSE_CATEGORIES, getCategory } from "../lib/categories";
 import { todayLocalYmd } from "../lib/dates";
+import { Portal } from "./Portal";
 
 interface CreditCardsTrackerProps {
   creditCards: CreditCard[];
@@ -93,6 +94,10 @@ export function CreditCardsTracker({
   };
   // Card creation form states
   const [showAddCard, setShowAddCard] = useState(false);
+  const addCardFormRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (showAddCard) addCardFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [showAddCard]);
   const [cardName, setCardName] = useState("");
   const [cardLimit, setCardLimit] = useState("");
   const [cutoffDay, setCutoffDay] = useState("");
@@ -263,7 +268,7 @@ export function CreditCardsTracker({
 
       {/* Add Card Form */}
       {showAddCard && (
-        <form onSubmit={handleCreateCard} className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-6 grid grid-cols-1 sm:grid-cols-4 gap-3 animate-fade-in" id="add-card-form">
+        <form ref={addCardFormRef} onSubmit={handleCreateCard} className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-6 grid grid-cols-1 sm:grid-cols-4 gap-3 animate-fade-in" id="add-card-form">
           <div className="sm:col-span-1">
             <label className="block text-[10px] text-slate-450 font-bold uppercase font-display">Nombre Banco / Tarjeta</label>
             <input
@@ -784,6 +789,7 @@ export function CreditCardsTracker({
 
       {/* Bottom sheet (mobile) / centered modal (desktop) to edit a category */}
       {editingCategoryFor && (
+        <Portal>
         <div
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
           onClick={() => setEditingCategoryFor(null)}
@@ -837,10 +843,12 @@ export function CreditCardsTracker({
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {/* Edit card details modal (cutoff/payment days, limit, name) */}
       {editingCardId && (
+        <Portal>
         <div
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
           onClick={() => setEditingCardId(null)}
@@ -921,6 +929,7 @@ export function CreditCardsTracker({
             </div>
           </div>
         </div>
+        </Portal>
       )}
     </div>
   );

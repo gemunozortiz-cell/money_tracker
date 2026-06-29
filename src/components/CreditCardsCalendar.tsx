@@ -6,6 +6,7 @@
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Scissors, DollarSign, X } from "lucide-react";
 import { CreditCard } from "../types";
+import { Portal } from "./Portal";
 
 interface CreditCardsCalendarProps {
   creditCards: (CreditCard & { currentBalance: number })[];
@@ -219,6 +220,7 @@ export function CreditCardsCalendar({ creditCards, simulatedDate }: CreditCardsC
 
       {/* Day detail bottom sheet */}
       {selectedDay != null && selectedEvents.length > 0 && (
+        <Portal>
         <div
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center"
           onClick={() => setSelectedDay(null)}
@@ -271,6 +273,7 @@ export function CreditCardsCalendar({ creditCards, simulatedDate }: CreditCardsC
             </p>
           </div>
         </div>
+        </Portal>
       )}
     </div>
   );

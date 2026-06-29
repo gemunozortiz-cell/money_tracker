@@ -153,6 +153,15 @@ export default function App() {
   const [newCashName, setNewCashName] = useState("Efectivo");
   const [newCashBalance, setNewCashBalance] = useState("");
   const [addCashError, setAddCashError] = useState("");
+  // Bring inline add-forms into view as soon as they open (they render below a chart).
+  const addInstFormRef = useRef<HTMLFormElement>(null);
+  const addCashFormRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (showAddInstrument) addInstFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [showAddInstrument]);
+  useEffect(() => {
+    if (showAddCash) addCashFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [showAddCash]);
   // Optional tiered config when creating an instrument
   const [newInstCap, setNewInstCap] = useState("");
   const [newInstExcessRate, setNewInstExcessRate] = useState("");
@@ -531,7 +540,7 @@ export default function App() {
 
             {/* Scrollable body */}
             <div
-              className="overflow-y-auto p-5 pt-4 space-y-4"
+              className="overflow-y-auto p-5 pt-4 space-y-4 flex-1 min-h-0"
               style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
             >
             <div>
@@ -832,7 +841,7 @@ export default function App() {
             </header>
 
             {showAddCash && (
-              <form onSubmit={handleCreateCash} className="bg-amber-500/[0.06] border border-amber-500/20 rounded-2xl p-4 space-y-3">
+              <form ref={addCashFormRef} onSubmit={handleCreateCash} className="bg-amber-500/[0.06] border border-amber-500/20 rounded-2xl p-4 space-y-3">
                 <p className="text-[10px] uppercase font-bold text-amber-300 tracking-widest">Nueva cuenta de efectivo</p>
                 <div className="grid grid-cols-2 gap-2">
                   <input
@@ -863,7 +872,7 @@ export default function App() {
             <PortfolioHistoryChart series={historicalSeries} variant="full" defaultDays={30} loading={historicalLoading} />
 
             {showAddInstrument && (
-              <form onSubmit={handleCreateInstrument} className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3">
+              <form ref={addInstFormRef} onSubmit={handleCreateInstrument} className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3">
                 <input
                   type="text"
                   required
