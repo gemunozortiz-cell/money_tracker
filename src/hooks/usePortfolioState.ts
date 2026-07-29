@@ -230,6 +230,11 @@ export function usePortfolioState(userId: string | null = null) {
   // When true, the current state update came from a Realtime push from another device
   // (or the same device's own write echo) — skip writing it back to avoid loops.
   const applyingRealtimeRef = useRef<boolean>(false);
+  // Latest cloud `updated_at` (ms) we've applied or written. Guards against a
+  // stale Realtime push (e.g. a delayed echo of an older state, or another
+  // device that was behind) overwriting a newer local edit — the "expense
+  // appears then vanishes" class of bug.
+  const lastUpdatedAtRef = useRef<number>(0);
 
   // (1) On sign-in / sign-out: refresh the cloud snapshot
   useEffect(() => {
@@ -267,6 +272,7 @@ export function usePortfolioState(userId: string | null = null) {
           if (upsertErr) throw upsertErr;
         }
 
+        if (data?.updated_at) lastUpdatedAtRef.current = new Date(data.updated_at).getTime();
         hasLoadedFromCloudRef.current = true;
         setSyncStatus("synced");
         setLastSyncedAt(new Date());
@@ -306,6 +312,13 @@ export function usePortfolioState(userId: string | null = null) {
             console.log("[Realtime] No state in payload, ignoring");
             return;
           }
+          // Ignore stale pushes (delayed echoes or a device that was behind):
+          // only apply state strictly newer than what we've already got.
+          const incomingTs = payload?.new?.updated_at ? new Date(payload.new.updated_at).getTime() : 0;
+          if (incomingTs && incomingTs <= lastUpdatedAtRef.current) {
+            console.log("[Realtime] Ignoring stale/echo push (not newer than local)");
+            return;
+          }
           setState(prev => {
             // Compare without `currentDateOffsetDays` (that's device-local for the time machine)
             const stripOffset = (s: any) => {
@@ -324,6 +337,7 @@ export function usePortfolioState(userId: string | null = null) {
               currentDateOffsetDays: prev.currentDateOffsetDays // keep local time machine
             };
           });
+          if (incomingTs) lastUpdatedAtRef.current = incomingTs;
           setLastSyncedAt(new Date(payload.new.updated_at || Date.now()));
           setSyncStatus("synced");
         }
@@ -361,11 +375,14 @@ export function usePortfolioState(userId: string | null = null) {
     // slow enough to batch micro-rapid updates into a single Supabase call.
     cloudWriteTimerRef.current = window.setTimeout(async () => {
       try {
-        const { error } = await supabase.from("portfolios").upsert({
-          user_id: userId,
-          state
-        });
+        const { data: up, error } = await supabase
+          .from("portfolios")
+          .upsert({ user_id: userId, state })
+          .select("updated_at")
+          .maybeSingle();
         if (error) throw error;
+        // Advance our watermark so the Realtime echo of THIS write is ignored.
+        if (up?.updated_at) lastUpdatedAtRef.current = new Date(up.updated_at).getTime();
         setSyncStatus("synced");
         setLastSyncedAt(new Date());
       } catch (e: any) {
@@ -408,8 +425,19 @@ export function usePortfolioState(userId: string | null = null) {
         /* best-effort */
       }
     };
+    // iOS Safari/PWA does NOT reliably fire `beforeunload`. `pagehide` and
+    // `visibilitychange`→hidden DO fire when the app is backgrounded or closed,
+    // so we flush any pending write there too. Without this, an expense added
+    // right before switching apps never reaches the cloud and "disappears".
+    const onHide = () => { if (document.visibilityState === "hidden") handler(); };
     window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
+    window.addEventListener("pagehide", handler);
+    document.addEventListener("visibilitychange", onHide);
+    return () => {
+      window.removeEventListener("beforeunload", handler);
+      window.removeEventListener("pagehide", handler);
+      document.removeEventListener("visibilitychange", onHide);
+    };
   }, [userId]);
 
   // Load the demo dataset (opt-in, for exploring the app). Keeps the user's profile.
