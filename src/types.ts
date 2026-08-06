@@ -90,4 +90,5 @@ export interface CreditCardExpense {
   amount: number;
   date: string; // YYYY-MM-DD
   category?: string; // id from EXPENSE_CATEGORIES (auto-filled by AI, can be overridden manually)
+  msiMonths?: number; // Meses sin intereses: nº de mensualidades (>1). Ausente o 1 = compra de contado.
 }

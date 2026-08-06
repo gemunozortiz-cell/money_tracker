@@ -15,7 +15,7 @@ interface CreditCardsTrackerProps {
   cardExpenses: CreditCardExpense[];
   onAddCard: (name: string, limit: number, cutoff: number, due: number) => void;
   onDeleteCard: (id: string) => void;
-  onAddExpense: (cardId: string, concept: string, amount: number, date: string, category?: string) => string;
+  onAddExpense: (cardId: string, concept: string, amount: number, date: string, category?: string, msiMonths?: number) => string;
   onDeleteExpense: (id: string) => void;
   onSetExpenseCategory: (id: string, category: string) => void;
   onPayCard: (cardId: string, amountPaid: number) => void;
@@ -117,6 +117,7 @@ export function CreditCardsTracker({
   const [expenseConcept, setExpenseConcept] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
   const [expenseDate, setExpenseDate] = useState(todayLocalYmd());
+  const [expenseMsi, setExpenseMsi] = useState("1"); // "1" = de contado; >1 = meses sin intereses
   const [expenseError, setExpenseError] = useState("");
 
   const handleCreateCard = (e: React.FormEvent) => {
@@ -166,11 +167,13 @@ export function CreditCardsTracker({
     }
 
     const concept = expenseConcept.trim();
-    const newId = onAddExpense(activeCardIdForExpense, concept, amountNum, expenseDate);
+    const msi = parseInt(expenseMsi, 10);
+    const newId = onAddExpense(activeCardIdForExpense, concept, amountNum, expenseDate, undefined, msi > 1 ? msi : undefined);
     // Fire-and-forget AI categorization (writes back via onSetExpenseCategory)
     classifyExpense(newId, concept, amountNum);
     setExpenseConcept("");
     setExpenseAmount("");
+    setExpenseMsi("1");
     setExpenseError("");
     setActiveCardIdForExpense(null);
   };
@@ -657,6 +660,27 @@ export function CreditCardsTracker({
                         </div>
                       </div>
                       <div>
+                        <label className="block text-[9px] text-slate-400 font-bold">Meses sin intereses (MSI)</label>
+                        <select
+                          value={expenseMsi}
+                          onChange={e => setExpenseMsi(e.target.value)}
+                          className="w-full text-xs border border-white/10 bg-[#080d19] rounded p-1.5 mt-0.5 focus:outline-none focus:border-indigo-500 text-white"
+                        >
+                          <option value="1">De contado (sin MSI)</option>
+                          <option value="3">3 meses sin intereses</option>
+                          <option value="6">6 meses sin intereses</option>
+                          <option value="9">9 meses sin intereses</option>
+                          <option value="12">12 meses sin intereses</option>
+                          <option value="18">18 meses sin intereses</option>
+                          <option value="24">24 meses sin intereses</option>
+                        </select>
+                        {parseInt(expenseMsi, 10) > 1 && parseFloat(expenseAmount) > 0 && (
+                          <p className="text-[9px] text-emerald-300 mt-0.5 font-bold">
+                            ≈ ${(parseFloat(expenseAmount) / parseInt(expenseMsi, 10)).toLocaleString("es-MX", { maximumFractionDigits: 2 })} al mes durante {expenseMsi} meses
+                          </p>
+                        )}
+                      </div>
+                      <div>
                         <label className="block text-[9px] text-slate-400 font-bold">Concepto / Comercio</label>
                         <input
                           type="text"
@@ -727,8 +751,13 @@ export function CreditCardsTracker({
                           <div key={ex.id} className="flex justify-between items-center text-xs border-b border-white/5 pb-1.5 hover:bg-white/[0.02] p-1 rounded transition-all gap-2">
                             <div className="min-w-0 flex-1">
                               <span className="font-semibold text-slate-200 block truncate">{ex.concept}</span>
-                              <div className="flex items-center gap-1.5 mt-0.5">
+                              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                                 <span className="text-[9px] text-slate-400">{ex.date}</span>
+                                {!isPayment && ex.msiMonths && ex.msiMonths > 1 && (
+                                  <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30 whitespace-nowrap">
+                                    {ex.msiMonths} MSI · ${(Math.abs(ex.amount) / ex.msiMonths).toLocaleString("es-MX", { maximumFractionDigits: 0 })}/mes
+                                  </span>
+                                )}
                                 {!isPayment && (
                                   isCategorizing ? (
                                     <span className="inline-flex items-center gap-1 text-[10px] text-slate-400">

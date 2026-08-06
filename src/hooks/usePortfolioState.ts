@@ -594,7 +594,7 @@ export function usePortfolioState(userId: string | null = null) {
 
   // Returns the new expense id so the caller can fire async AI categorization
   // and route the response back into setCardExpenseCategory.
-  const addCardExpense = (cardId: string, concept: string, amount: number, date: string, category?: string): string => {
+  const addCardExpense = (cardId: string, concept: string, amount: number, date: string, category?: string, msiMonths?: number): string => {
     const id = `ccex-${Date.now()}`;
     const expense: CreditCardExpense = {
       id,
@@ -602,7 +602,8 @@ export function usePortfolioState(userId: string | null = null) {
       concept,
       amount,
       date,
-      category
+      category,
+      ...(msiMonths && msiMonths > 1 ? { msiMonths } : {})
     };
     setState(prev => {
       // If the card has a manual balance override, the auto-sum of expenses is

@@ -870,25 +870,68 @@ Responde SOLO el id (ej. "restaurantes"), sin explicar. Si dudas, usa "otro".`;
       const currentUtcHour = new Date().getUTCHours();
       const { data, error } = await adminSupabase
         .from("push_subscriptions")
-        .select("endpoint, subscription, reminder_hour_utc")
+        .select("endpoint, subscription, reminder_hour_utc, user_id")
         .eq("reminder_hour_utc", currentUtcHour);
       if (error) throw error;
 
       const subs = data || [];
+
+      // Today's day-of-month in Mexico time — used for credit-card cutoff/payment reminders.
+      const todayDom = parseInt(
+        new Intl.DateTimeFormat("en-US", { timeZone: "America/Mexico_City", day: "numeric" }).format(new Date()),
+        10
+      );
+
+      // Pull the portfolios of the users due right now so we can check their card dates.
+      const userIds = [...new Set(subs.map((s: any) => s.user_id).filter(Boolean))];
+      const portfoliosByUser: Record<string, any> = {};
+      if (userIds.length > 0) {
+        const { data: ports } = await adminSupabase
+          .from("portfolios")
+          .select("user_id, state")
+          .in("user_id", userIds);
+        (ports || []).forEach((p: any) => { portfoliosByUser[p.user_id] = p.state; });
+      }
+
       let sent = 0;
       const deadEndpoints: string[] = [];
       await Promise.all(subs.map(async (row: any) => {
-        try {
-          await webpush.sendNotification(row.subscription, JSON.stringify({
-            title: "📝 Control de Portafolio",
-            body: "¿Ya registraste tus gastos e ingresos de hoy? Tócame para actualizar tu portafolio.",
-            url: "/"
-          }));
-          sent++;
-        } catch (err: any) {
-          // 404/410 = subscription expired; clean it up
-          if (err?.statusCode === 404 || err?.statusCode === 410) {
-            deadEndpoints.push(row.endpoint);
+        // Every due user gets the daily "log your expenses" nudge...
+        const notifications: { title: string; body: string; url: string }[] = [{
+          title: "📝 Control de Portafolio",
+          body: "¿Ya registraste tus gastos e ingresos de hoy? Tócame para actualizar tu portafolio.",
+          url: "/"
+        }];
+
+        // ...plus a reminder for every card whose cutoff or payment date is today.
+        const cards = portfoliosByUser[row.user_id]?.creditCards || [];
+        for (const cc of cards) {
+          if (cc?.cutoffDay === todayDom) {
+            notifications.push({
+              title: "✂️ Corte de tarjeta hoy",
+              body: `Hoy corta ${cc.name || "tu tarjeta"}. Revisa cuánto gastaste este periodo.`,
+              url: "/"
+            });
+          }
+          if (cc?.paymentDueDay === todayDom) {
+            notifications.push({
+              title: "💳 Pago de tarjeta hoy",
+              body: `Hoy vence el pago de ${cc.name || "tu tarjeta"}. ¡Págalo para no generar intereses!`,
+              url: "/"
+            });
+          }
+        }
+
+        for (const n of notifications) {
+          try {
+            await webpush.sendNotification(row.subscription, JSON.stringify(n));
+            sent++;
+          } catch (err: any) {
+            // 404/410 = subscription expired; clean it up and stop sending to it.
+            if (err?.statusCode === 404 || err?.statusCode === 410) {
+              if (!deadEndpoints.includes(row.endpoint)) deadEndpoints.push(row.endpoint);
+            }
+            break;
           }
         }
       }));
