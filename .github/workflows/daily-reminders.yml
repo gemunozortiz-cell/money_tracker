@@ -1,0 +1,39 @@
+name: Recordatorios diarios
+
+# Dispara los recordatorios push (gasto diario + corte/pago de tarjetas).
+#
+# Por qué GitHub Actions y no cron-job.org: Render responde 429 (Too Many
+# Requests) a las IPs compartidas de cron-job.org, así que las llamadas nunca
+# llegaban. Los runners de GitHub salen por IPs de Azure, que Render sí acepta.
+#
+# El backend decide a quién notificar: solo envía a los usuarios cuya
+# reminder_hour_utc coincide con la hora UTC actual. 03:00 UTC = 21:00 en México
+# (UTC-6 todo el año). Si GitHub retrasa el disparo, cualquier momento dentro de
+# la hora 03:xx UTC sigue siendo válido.
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch: # permite ejecutarlo a mano desde la pestaña Actions
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Despertar el servidor (Render free duerme tras 15 min)
+        run: |
+          curl -sS -o /dev/null -w "wake: HTTP %{http_code} en %{time_total}s\n" \
+            --max-time 120 --retry 3 --retry-all-errors --retry-delay 10 \
+            https://money-tracker-2eil.onrender.com/
+
+      - name: Esperar a que termine de arrancar
+        run: sleep 15
+
+      - name: Enviar recordatorios
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          resp=$(curl -sS -X POST --max-time 120 --retry 3 --retry-all-errors --retry-delay 10 \
+            "https://money-tracker-2eil.onrender.com/api/push/send-reminders?secret=${CRON_SECRET}")
+          echo "Respuesta: $resp"
+          echo "$resp" | grep -q '"ok":true' || { echo "El envío falló"; exit 1; }
