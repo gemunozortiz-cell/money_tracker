@@ -6,14 +6,14 @@ name: Recordatorios diarios
 # Requests) a las IPs compartidas de cron-job.org, así que las llamadas nunca
 # llegaban. Los runners de GitHub salen por IPs de Azure, que Render sí acepta.
 #
-# El backend decide a quién notificar: solo envía a los usuarios cuya
-# reminder_hour_utc coincide con la hora UTC actual. 03:00 UTC = 21:00 en México
-# (UTC-6 todo el año). Si GitHub retrasa el disparo, cualquier momento dentro de
-# la hora 03:xx UTC sigue siendo válido.
+# Los runs programados de GitHub se retrasan de forma rutinaria 1-2 horas, así
+# que disparamos a las 02:00-05:00 UTC (21:00 MX es 03:00 UTC). El backend envía
+# al primer disparo que caiga dentro de su ventana y marca al usuario como
+# notificado ese día, de modo que los disparos restantes no duplican nada.
 
 on:
   schedule:
-    - cron: "0 3 * * *"
+    - cron: "0 2-5 * * *"
   workflow_dispatch: # permite ejecutarlo a mano desde la pestaña Actions
 
 jobs:

@@ -858,8 +858,18 @@ Responde SOLO el id (ej. "restaurantes"), sin explicar. Si dudas, usa "otro".`;
     }
   });
 
-  // CRON endpoint: called hourly by an external scheduler (cron-job.org).
-  // Sends the daily reminder to every subscription whose reminder_hour_utc == current UTC hour.
+  // CRON endpoint: called by GitHub Actions a few times around the reminder hour.
+  //
+  // We deliberately do NOT require `reminder_hour_utc === currentUtcHour`.
+  // Scheduled GitHub Actions runs are routinely delayed 1–2 hours (the queue for
+  // `minute 0` crons is enormous), so an exact-hour match silently sent nothing.
+  // Instead we fire for anyone whose reminder hour is within the last
+  // REMINDER_WINDOW_HOURS, and use a once-per-day guard so the extra runs in
+  // that window can't double-notify.
+  //
+  // Query params (all optional, secret still required):
+  //   hour=N   pretend it's UTC hour N — for testing
+  //   force=1  skip the "already sent today" guard — for testing
   app.post("/api/push/send-reminders", async (req, res) => {
     if (!PUSH_ENABLED || !adminSupabase) return res.status(503).json({ error: "Push no configurado" });
     const secret = req.query.secret || req.headers["x-cron-secret"];
@@ -867,14 +877,26 @@ Responde SOLO el id (ej. "restaurantes"), sin explicar. Si dudas, usa "otro".`;
       return res.status(401).json({ error: "No autorizado" });
     }
     try {
-      const currentUtcHour = new Date().getUTCHours();
+      const REMINDER_WINDOW_HOURS = 3;
+      const now = new Date();
+      const hourOverride = req.query.hour != null ? parseInt(String(req.query.hour), 10) : NaN;
+      const currentUtcHour = Number.isInteger(hourOverride) ? hourOverride : now.getUTCHours();
+      const force = req.query.force === "1";
+      const todayUtcYmd = now.toISOString().slice(0, 10);
+
       const { data, error } = await adminSupabase
         .from("push_subscriptions")
-        .select("endpoint, subscription, reminder_hour_utc, user_id")
-        .eq("reminder_hour_utc", currentUtcHour);
+        .select("endpoint, subscription, reminder_hour_utc, user_id, updated_at");
       if (error) throw error;
 
-      const subs = data || [];
+      const subs = (data || []).filter((row: any) => {
+        // Hours since this user's reminder time (wraps correctly across midnight).
+        const elapsed = (currentUtcHour - (row.reminder_hour_utc ?? 3) + 24) % 24;
+        if (elapsed > REMINDER_WINDOW_HOURS) return false;
+        // Once per day: `updated_at` is bumped after each successful send.
+        if (!force && row.updated_at && String(row.updated_at).slice(0, 10) === todayUtcYmd) return false;
+        return true;
+      });
 
       // Today's day-of-month in Mexico time — used for credit-card cutoff/payment reminders.
       const todayDom = parseInt(
@@ -895,6 +917,7 @@ Responde SOLO el id (ej. "restaurantes"), sin explicar. Si dudas, usa "otro".`;
 
       let sent = 0;
       const deadEndpoints: string[] = [];
+      const notifiedEndpoints: string[] = [];
       await Promise.all(subs.map(async (row: any) => {
         // Every due user gets the daily "log your expenses" nudge...
         const notifications: { title: string; body: string; url: string }[] = [{
@@ -926,6 +949,7 @@ Responde SOLO el id (ej. "restaurantes"), sin explicar. Si dudas, usa "otro".`;
           try {
             await webpush.sendNotification(row.subscription, JSON.stringify(n));
             sent++;
+            if (!notifiedEndpoints.includes(row.endpoint)) notifiedEndpoints.push(row.endpoint);
           } catch (err: any) {
             // 404/410 = subscription expired; clean it up and stop sending to it.
             if (err?.statusCode === 404 || err?.statusCode === 410) {
@@ -938,6 +962,13 @@ Responde SOLO el id (ej. "restaurantes"), sin explicar. Si dudas, usa "otro".`;
 
       if (deadEndpoints.length > 0) {
         await adminSupabase.from("push_subscriptions").delete().in("endpoint", deadEndpoints);
+      }
+      // Stamp the successful sends so later runs inside the same window skip them.
+      if (notifiedEndpoints.length > 0) {
+        await adminSupabase
+          .from("push_subscriptions")
+          .update({ updated_at: new Date().toISOString() })
+          .in("endpoint", notifiedEndpoints);
       }
       return res.json({ ok: true, hour: currentUtcHour, candidates: subs.length, sent, cleaned: deadEndpoints.length });
     } catch (e: any) {
