@@ -127,41 +127,66 @@ function describeUserProfile(p: any): string {
   return `\n\nPERFIL DEL USUARIO (personaliza tus consejos a esto):\n${lines.join("\n")}`;
 }
 
-// `gemini-3.5-flash` does NOT exist — that was the silent bug that kept the
-// app stuck in fallback mode. 2.5-flash is current, fast and cheap.
-const GEMINI_MODEL_PRIMARY = "gemini-2.5-flash";
-const GEMINI_MODEL_FALLBACK = "gemini-2.0-flash"; // stable (not -exp, which can be deprecated)
+// Two model ladders, because the two jobs want opposite things.
+//
+// REASONING — financial advice and market analysis. Quality matters more than
+// latency, so we lead with the newest thinking model and let it reason. Freshly
+// launched models return 503 "high demand" often, hence the ladder below it.
+//
+// FAST — expense categorisation. It's a trivial "pick one id" classification
+// that runs on every expense, so latency and the shared free-tier quota matter
+// more than reasoning power. Thinking is switched off for it (see callGemini).
+const GEMINI_MODELS_REASONING = ["gemini-3.7-flash", "gemini-3.5-flash", "gemini-2.5-flash"];
+const GEMINI_MODELS_FAST = ["gemini-2.5-flash", "gemini-3.5-flash"];
 
-// Calls Gemini with: 1 retry on 503/UNAVAILABLE → swap to a different model.
-// Surfaces structured errors so the client can show precise messages.
-async function callGeminiResilient(opts: { contents: string; systemInstruction: string }): Promise<{ text: string; modelUsed: string }> {
+// Cap the reasoning. Measured on gemini-3.5-flash with the same prompt:
+// unbounded = 54.7s, 2048 = 3.1s, 0 = 1.6s — and the capped answer was the most
+// specific of the three. Unbounded thinking is both the slowest and no better.
+const REASONING_THINKING_BUDGET = 2048;
+
+// Tries each model in the ladder once (fast path — a 503 on the newest model
+// shouldn't add seconds of retry delay before falling back). Only if the whole
+// ladder is overloaded do we pause and run through it a second time.
+// Non-retryable errors bubble up immediately so the client shows a precise message.
+async function callGeminiResilient(opts: {
+  contents: string;
+  systemInstruction: string;
+  models?: string[];
+  /** 0 disables thinking. Defaults to REASONING_THINKING_BUDGET — never unbounded. */
+  thinkingBudget?: number;
+}): Promise<{ text: string; modelUsed: string }> {
   const ai = getGeminiClient();
+  const models = opts.models ?? GEMINI_MODELS_REASONING;
+  const thinkingBudget = opts.thinkingBudget ?? REASONING_THINKING_BUDGET;
   const errors: string[] = [];
 
-  for (const model of [GEMINI_MODEL_PRIMARY, GEMINI_MODEL_FALLBACK]) {
-    for (let attempt = 0; attempt < 2; attempt++) {
+  for (let pass = 0; pass < 2; pass++) {
+    if (pass > 0) await new Promise(r => setTimeout(r, 1500));
+    for (const model of models) {
       try {
         const response = await ai.models.generateContent({
           model,
           contents: opts.contents,
-          config: { systemInstruction: opts.systemInstruction }
+          config: {
+            systemInstruction: opts.systemInstruction,
+            thinkingConfig: { thinkingBudget }
+          }
         });
-        return { text: response.text, modelUsed: model };
+        // A model can return empty text if it spent its whole budget thinking —
+        // treat that like a miss so the ladder keeps going instead of showing blank.
+        if (response.text && response.text.trim()) {
+          return { text: response.text, modelUsed: model };
+        }
+        errors.push(`${model}/pass${pass + 1}: respuesta vacía`);
       } catch (err: any) {
         const msg = err?.message || String(err);
-        const isOverloaded = /503|UNAVAILABLE|overloaded|high demand/i.test(msg);
-        errors.push(`${model}/attempt${attempt + 1}: ${msg.slice(0, 200)}`);
-        if (!isOverloaded) {
-          // Not a retryable error — bubble up immediately
-          throw err;
-        }
-        if (attempt === 0) {
-          await new Promise(r => setTimeout(r, 1500));
-        }
+        const isRetryable = /503|429|UNAVAILABLE|overloaded|high demand|RESOURCE_EXHAUSTED/i.test(msg);
+        errors.push(`${model}/pass${pass + 1}: ${msg.slice(0, 200)}`);
+        if (!isRetryable) throw err;
       }
     }
   }
-  const e = new Error(`Gemini overloaded on both models. Details: ${errors.join(" | ")}`);
+  const e = new Error(`Gemini saturado en todos los modelos. Detalles: ${errors.join(" | ")}`);
   (e as any).isOverloaded = true;
   throw e;
 }
@@ -750,7 +775,9 @@ ${lines}
 Responde ÚNICAMENTE las líneas "N: id", sin comentar. Si dudas, usa "otro".`;
         const { text } = await callGeminiResilient({
           contents: prompt,
-          systemInstruction: "Clasificador de gastos de tarjeta en México. Responde solo con ids exactos de categorías, sin texto extra."
+          systemInstruction: "Clasificador de gastos de tarjeta en México. Responde solo con ids exactos de categorías, sin texto extra.",
+          models: GEMINI_MODELS_FAST,
+          thinkingBudget: 0
         });
         const results: Record<string, string> = {};
         const lineRegex = /^(\d+)\s*[:.\-]\s*([a-z\-]+)/gim;
@@ -786,7 +813,9 @@ GASTO: "${concept.slice(0, 160)}"
 Responde SOLO el id (ej. "restaurantes"), sin explicar. Si dudas, usa "otro".`;
       const { text } = await callGeminiResilient({
         contents: prompt,
-        systemInstruction: "Clasificador de gastos de tarjeta en México. Responde solo con un id exacto, sin texto extra."
+        systemInstruction: "Clasificador de gastos de tarjeta en México. Responde solo con un id exacto, sin texto extra.",
+        models: GEMINI_MODELS_FAST,
+        thinkingBudget: 0
       });
       return res.json({ category: sanitizeCategory(text) });
     } catch (err: any) {
